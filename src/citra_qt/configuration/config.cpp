@@ -71,7 +71,7 @@ const std::array<UISettings::Shortcut, 38> QtConfig::default_hotkeys {{
      {QStringLiteral("Load Amiibo"),              QStringLiteral("Main Window"), {QStringLiteral("F2"),     Qt::WidgetWithChildrenShortcut}},
      {QStringLiteral("Load File"),                QStringLiteral("Main Window"), {QStringLiteral("Ctrl+O"), Qt::WidgetWithChildrenShortcut}},
      {QStringLiteral("Load from Newest Non-Quicksave Slot"),  QStringLiteral("Main Window"), {QStringLiteral("Ctrl+V"), Qt::WindowShortcut}},
-     {QStringLiteral("Multiplayer Browse Public Lobby"),      QStringLiteral("Main Window"), {QStringLiteral("Ctrl+B"), Qt::ApplicationShortcut}},
+     {QStringLiteral("Multiplayer Browse Public Rooms"),      QStringLiteral("Main Window"), {QStringLiteral("Ctrl+B"), Qt::ApplicationShortcut}},
      {QStringLiteral("Multiplayer Create Room"),              QStringLiteral("Main Window"), {QStringLiteral("Ctrl+N"), Qt::ApplicationShortcut}},
      {QStringLiteral("Multiplayer Direct Connect to Room"),   QStringLiteral("Main Window"), {QStringLiteral("Ctrl+Shift"), Qt::ApplicationShortcut}},
      {QStringLiteral("Multiplayer Leave Room"),               QStringLiteral("Main Window"), {QStringLiteral("Ctrl+L"), Qt::ApplicationShortcut}},
@@ -85,7 +85,6 @@ const std::array<UISettings::Shortcut, 38> QtConfig::default_hotkeys {{
      {QStringLiteral("Stop Emulation"),           QStringLiteral("Main Window"), {QStringLiteral("F5"),     Qt::WindowShortcut}},
      {QStringLiteral("Swap Screens"),             QStringLiteral("Main Window"), {QStringLiteral("F9"),     Qt::WindowShortcut}},
      {QStringLiteral("Toggle 3D"),                QStringLiteral("Main Window"), {QStringLiteral("Ctrl+3"), Qt::ApplicationShortcut}},
-     {QStringLiteral("Toggle Turbo Mode"),        QStringLiteral("Main Window"), {QStringLiteral(""),      Qt::ApplicationShortcut}},
      {QStringLiteral("Toggle Custom Textures"),   QStringLiteral("Main Window"), {QStringLiteral("F7"),     Qt::ApplicationShortcut}},
      {QStringLiteral("Toggle Filter Bar"),        QStringLiteral("Main Window"), {QStringLiteral("Ctrl+F"), Qt::WindowShortcut}},
      {QStringLiteral("Toggle Frame Advancing"),   QStringLiteral("Main Window"), {QStringLiteral("Ctrl+A"), Qt::ApplicationShortcut}},
@@ -93,6 +92,7 @@ const std::array<UISettings::Shortcut, 38> QtConfig::default_hotkeys {{
      {QStringLiteral("Toggle Screen Layout"),     QStringLiteral("Main Window"), {QStringLiteral("F10"),    Qt::WindowShortcut}},
      {QStringLiteral("Toggle Status Bar"),        QStringLiteral("Main Window"), {QStringLiteral("Ctrl+S"), Qt::WindowShortcut}},
      {QStringLiteral("Toggle Texture Dumping"),   QStringLiteral("Main Window"), {QStringLiteral(""),       Qt::ApplicationShortcut}},
+     {QStringLiteral("Toggle Turbo Mode"),        QStringLiteral("Main Window"), {QStringLiteral(""),      Qt::ApplicationShortcut}},
     }};
 // clang-format on
 
@@ -371,7 +371,7 @@ void QtConfig::ReadControlValues() {
     const auto append_profile = [this, num_touch_from_button_maps] {
         Settings::InputProfile profile;
         profile.name =
-            ReadSetting(QStringLiteral("name"), QStringLiteral("default")).toString().toStdString();
+            ReadSetting(QStringLiteral("name"), QStringLiteral("Default")).toString().toStdString();
         for (int i = 0; i < Settings::NativeButton::NumButtons; ++i) {
             std::string default_param = InputCommon::GenerateKeyboardParam(default_buttons[i]);
             profile.buttons[i] = ReadSetting(QString::fromUtf8(Settings::NativeButton::mapping[i]),
@@ -475,6 +475,7 @@ void QtConfig::ReadDataStorageValues() {
 
     ReadBasicSetting(Settings::values.use_virtual_sd);
     ReadBasicSetting(Settings::values.use_custom_storage);
+    ReadBasicSetting(Settings::values.compress_cia_installs);
 
     const std::string nand_dir =
         ReadSetting(QStringLiteral("nand_directory"), QStringLiteral("")).toString().toStdString();
@@ -500,6 +501,7 @@ void QtConfig::ReadDebuggingValues() {
     ReadBasicSetting(Settings::values.renderer_debug);
     ReadBasicSetting(Settings::values.dump_command_buffers);
     ReadBasicSetting(Settings::values.instant_debug_log);
+    ReadBasicSetting(Settings::values.enable_rpc_server);
 
     qt_config->beginGroup(QStringLiteral("LLE"));
     for (const auto& service_module : Service::service_module_map) {
@@ -515,6 +517,8 @@ void QtConfig::ReadLayoutValues() {
 
     ReadGlobalSetting(Settings::values.render_3d);
     ReadGlobalSetting(Settings::values.factor_3d);
+    ReadGlobalSetting(Settings::values.swap_eyes_3d);
+    ReadGlobalSetting(Settings::values.render_3d_which_display);
     ReadGlobalSetting(Settings::values.filter_mode);
     ReadGlobalSetting(Settings::values.pp_shader_name);
     ReadGlobalSetting(Settings::values.anaglyph_shader_name);
@@ -666,6 +670,11 @@ void QtConfig::ReadPathValues() {
             ReadSetting(QStringLiteral("last_artic_base_addr"), QString{}).toString();
         UISettings::values.recent_files = ReadSetting(QStringLiteral("recentFiles")).toStringList();
         UISettings::values.language = ReadSetting(QStringLiteral("language"), QString{}).toString();
+
+        ReadBasicSetting(UISettings::values.inserted_cartridge);
+        if (!FileUtil::Exists(UISettings::values.inserted_cartridge.GetValue())) {
+            UISettings::values.inserted_cartridge.SetValue("");
+        }
     }
 
     qt_config->endGroup();
@@ -677,14 +686,16 @@ void QtConfig::ReadRendererValues() {
     ReadGlobalSetting(Settings::values.graphics_api);
     ReadGlobalSetting(Settings::values.physical_device);
     ReadGlobalSetting(Settings::values.spirv_shader_gen);
+    ReadGlobalSetting(Settings::values.disable_spirv_optimizer);
     ReadGlobalSetting(Settings::values.async_shader_compilation);
     ReadGlobalSetting(Settings::values.async_presentation);
     ReadGlobalSetting(Settings::values.use_hw_shader);
     ReadGlobalSetting(Settings::values.shaders_accurate_mul);
     ReadGlobalSetting(Settings::values.use_disk_shader_cache);
-    ReadGlobalSetting(Settings::values.use_vsync_new);
+    ReadGlobalSetting(Settings::values.use_vsync);
     ReadGlobalSetting(Settings::values.resolution_factor);
     ReadGlobalSetting(Settings::values.frame_limit);
+    ReadGlobalSetting(Settings::values.turbo_limit);
 
     ReadGlobalSetting(Settings::values.bg_red);
     ReadGlobalSetting(Settings::values.bg_green);
@@ -741,6 +752,7 @@ void QtConfig::ReadSystemValues() {
         ReadBasicSetting(Settings::values.steps_per_hour);
         ReadBasicSetting(Settings::values.plugin_loader_enabled);
         ReadBasicSetting(Settings::values.allow_plugin_loader);
+        ReadBasicSetting(Settings::values.apply_region_free_patch);
     }
 
     qt_config->endGroup();
@@ -811,7 +823,7 @@ void QtConfig::ReadUIValues() {
         ReadBasicSetting(UISettings::values.display_titlebar);
         ReadBasicSetting(UISettings::values.show_filter_bar);
         ReadBasicSetting(UISettings::values.show_status_bar);
-        ReadBasicSetting(Settings::values.turbo_speed);
+        ReadBasicSetting(UISettings::values.show_advanced_frametime_info);
         ReadBasicSetting(UISettings::values.confirm_before_closing);
         ReadBasicSetting(UISettings::values.save_state_warning);
         ReadBasicSetting(UISettings::values.first_start);
@@ -1042,6 +1054,7 @@ void QtConfig::SaveDataStorageValues() {
 
     WriteBasicSetting(Settings::values.use_virtual_sd);
     WriteBasicSetting(Settings::values.use_custom_storage);
+    WriteBasicSetting(Settings::values.compress_cia_installs);
     WriteSetting(QStringLiteral("nand_directory"),
                  QString::fromStdString(FileUtil::GetUserPath(FileUtil::UserPath::NANDDir)),
                  QStringLiteral(""));
@@ -1061,6 +1074,7 @@ void QtConfig::SaveDebuggingValues() {
     WriteBasicSetting(Settings::values.gdbstub_port);
     WriteBasicSetting(Settings::values.renderer_debug);
     WriteBasicSetting(Settings::values.instant_debug_log);
+    WriteBasicSetting(Settings::values.enable_rpc_server);
 
     qt_config->beginGroup(QStringLiteral("LLE"));
     for (const auto& service_module : Settings::values.lle_modules) {
@@ -1076,6 +1090,8 @@ void QtConfig::SaveLayoutValues() {
 
     WriteGlobalSetting(Settings::values.render_3d);
     WriteGlobalSetting(Settings::values.factor_3d);
+    WriteGlobalSetting(Settings::values.swap_eyes_3d);
+    WriteGlobalSetting(Settings::values.render_3d_which_display);
     WriteGlobalSetting(Settings::values.filter_mode);
     WriteGlobalSetting(Settings::values.pp_shader_name);
     WriteGlobalSetting(Settings::values.anaglyph_shader_name);
@@ -1193,6 +1209,7 @@ void QtConfig::SavePathValues() {
                      UISettings::values.last_artic_base_addr, QString{});
         WriteSetting(QStringLiteral("recentFiles"), UISettings::values.recent_files);
         WriteSetting(QStringLiteral("language"), UISettings::values.language, QString{});
+        WriteBasicSetting(UISettings::values.inserted_cartridge);
     }
 
     qt_config->endGroup();
@@ -1204,14 +1221,16 @@ void QtConfig::SaveRendererValues() {
     WriteGlobalSetting(Settings::values.graphics_api);
     WriteGlobalSetting(Settings::values.physical_device);
     WriteGlobalSetting(Settings::values.spirv_shader_gen);
+    WriteGlobalSetting(Settings::values.disable_spirv_optimizer);
     WriteGlobalSetting(Settings::values.async_shader_compilation);
     WriteGlobalSetting(Settings::values.async_presentation);
     WriteGlobalSetting(Settings::values.use_hw_shader);
     WriteGlobalSetting(Settings::values.shaders_accurate_mul);
     WriteGlobalSetting(Settings::values.use_disk_shader_cache);
-    WriteGlobalSetting(Settings::values.use_vsync_new);
+    WriteGlobalSetting(Settings::values.use_vsync);
     WriteGlobalSetting(Settings::values.resolution_factor);
     WriteGlobalSetting(Settings::values.frame_limit);
+    WriteGlobalSetting(Settings::values.turbo_limit);
 
     WriteGlobalSetting(Settings::values.bg_red);
     WriteGlobalSetting(Settings::values.bg_green);
@@ -1268,6 +1287,7 @@ void QtConfig::SaveSystemValues() {
         WriteBasicSetting(Settings::values.steps_per_hour);
         WriteBasicSetting(Settings::values.plugin_loader_enabled);
         WriteBasicSetting(Settings::values.allow_plugin_loader);
+        WriteBasicSetting(Settings::values.apply_region_free_patch);
     }
 
     qt_config->endGroup();
@@ -1321,8 +1341,8 @@ void QtConfig::SaveUIValues() {
         WriteBasicSetting(UISettings::values.display_titlebar);
         WriteBasicSetting(UISettings::values.show_filter_bar);
         WriteBasicSetting(UISettings::values.show_status_bar);
+        WriteBasicSetting(UISettings::values.show_advanced_frametime_info);
         WriteBasicSetting(UISettings::values.confirm_before_closing);
-        WriteBasicSetting(Settings::values.turbo_speed);
         WriteBasicSetting(UISettings::values.save_state_warning);
         WriteBasicSetting(UISettings::values.first_start);
         WriteBasicSetting(UISettings::values.callout_flags);

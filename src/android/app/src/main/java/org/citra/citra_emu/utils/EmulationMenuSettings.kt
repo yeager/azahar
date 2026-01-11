@@ -1,4 +1,4 @@
-// Copyright 2023 Citra Emulator Project
+// Copyright Citra Emulator Project / Azahar Emulator Project
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
@@ -7,6 +7,7 @@ package org.citra.citra_emu.utils
 import androidx.drawerlayout.widget.DrawerLayout
 import androidx.preference.PreferenceManager
 import org.citra.citra_emu.CitraApplication
+import org.citra.citra_emu.overlay.ButtonSlidingMode
 
 object EmulationMenuSettings {
     private val preferences =
@@ -26,14 +27,14 @@ object EmulationMenuSettings {
                 .putBoolean("EmulationMenuSettings_DpadSlideEnable", value)
                 .apply()
         }
-
-    var showFps: Boolean
-        get() = preferences.getBoolean("EmulationMenuSettings_ShowFps", false)
+    var buttonSlide: Int
+        get() = preferences.getInt("EmulationMenuSettings_ButtonSlideMode", ButtonSlidingMode.Disabled.int)
         set(value) {
             preferences.edit()
-                    .putBoolean("EmulationMenuSettings_ShowFps", value)
-                    .apply()
+                .putInt("EmulationMenuSettings_ButtonSlideMode", value)
+                .apply()
         }
+
     var hapticFeedback: Boolean
         get() = preferences.getBoolean("EmulationMenuSettings_HapticFeedback", true)
         set(value) {

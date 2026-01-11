@@ -1,4 +1,4 @@
-// Copyright 2022 Citra Emulator Project
+// Copyright Citra Emulator Project / Azahar Emulator Project
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
@@ -89,8 +89,8 @@ static std::tuple<PicaVSConfig, Pica::ShaderSetup> BuildVSConfigFromRaw(
     std::copy_n(raw.GetProgramCode().begin() + Pica::MAX_PROGRAM_CODE_LENGTH,
                 Pica::MAX_SWIZZLE_DATA_LENGTH, swizzle_data.begin());
     Pica::ShaderSetup setup;
-    setup.program_code = program_code;
-    setup.swizzle_data = swizzle_data;
+    setup.UpdateProgramCode(program_code);
+    setup.UpdateSwizzleData(swizzle_data);
 
     // Enable the geometry-shader only if we are actually doing per-fragment lighting
     // and care about proper quaternions. Otherwise just use standard vertex+fragment shaders
@@ -259,10 +259,10 @@ using FragmentShaders = ShaderCache<FSConfig, &GLSL::GenerateFragmentShader, GL_
 
 class ShaderProgramManager::Impl {
 public:
-    explicit Impl(const Driver& driver, bool separable)
+    explicit Impl(const Driver& driver, u64 title_id, bool separable)
         : separable(separable), programmable_vertex_shaders(separable),
           trivial_vertex_shader(driver, separable), fixed_geometry_shaders(separable),
-          fragment_shaders(separable), disk_cache(separable) {
+          fragment_shaders(separable), disk_cache(title_id, separable) {
         if (separable) {
             pipeline.Create();
         }
@@ -329,10 +329,10 @@ public:
 };
 
 ShaderProgramManager::ShaderProgramManager(Frontend::EmuWindow& emu_window_, const Driver& driver_,
-                                           bool separable)
+                                           u64 title_id, bool separable)
     : emu_window{emu_window_}, driver{driver_},
       strict_context_required{emu_window.StrictContextRequired()},
-      impl{std::make_unique<Impl>(driver_, separable)} {}
+      impl{std::make_unique<Impl>(driver_, title_id, separable)} {}
 
 ShaderProgramManager::~ShaderProgramManager() = default;
 
@@ -354,12 +354,13 @@ bool ShaderProgramManager::UseProgrammableVertexShader(const Pica::RegsInternal&
     // Save VS to the disk cache if its a new shader
     if (result) {
         auto& disk_cache = impl->disk_cache;
-        ProgramCode program_code{setup.program_code.begin(), setup.program_code.end()};
-        program_code.insert(program_code.end(), setup.swizzle_data.begin(),
-                            setup.swizzle_data.end());
-        const u64 unique_identifier = GetUniqueIdentifier(regs, program_code);
+        const auto& program_code = setup.GetProgramCode();
+        const auto& swizzle_data = setup.GetSwizzleData();
+        ProgramCode new_program_code{program_code.begin(), program_code.end()};
+        new_program_code.insert(new_program_code.end(), swizzle_data.begin(), swizzle_data.end());
+        const u64 unique_identifier = GetUniqueIdentifier(regs, new_program_code);
         const ShaderDiskCacheRaw raw{unique_identifier, ProgramType::VS, regs,
-                                     std::move(program_code)};
+                                     std::move(new_program_code)};
         disk_cache.SaveRaw(raw);
         disk_cache.SaveDecompiled(unique_identifier, *result, accurate_mul);
     }
@@ -423,6 +424,10 @@ void ShaderProgramManager::ApplyTo(OpenGLState& state, bool accurate_mul) {
         }
         state.draw.shader_program = cached_program.handle;
     }
+}
+
+u64 ShaderProgramManager::GetProgramID() const {
+    return impl->disk_cache.GetProgramID();
 }
 
 void ShaderProgramManager::LoadDiskCache(const std::atomic_bool& stop_loading,

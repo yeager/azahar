@@ -130,25 +130,10 @@ if (BUNDLE_TARGET_EXECUTE)
             --icon-file "${CMAKE_BINARY_DIR}/dist/org.azahar_emu.Azahar.svg"
             --desktop-file "${source_path}/dist/${executable_name}.desktop"
             --appdir "${appdir_path}"
-            RESULT_VARIABLE linuxdeploy_appdir_result)
+            RESULT_VARIABLE linuxdeploy_appdir_result
+            ERROR_VARIABLE linuxdeploy_appdir_error)
         if (NOT linuxdeploy_appdir_result EQUAL "0")
-            message(FATAL_ERROR "linuxdeploy failed to create AppDir: ${linuxdeploy_appdir_result}")
-        endif()
-
-        if (enable_qt)
-            set(qt_hook_file "${appdir_path}/apprun-hooks/linuxdeploy-plugin-qt-hook.sh")
-            file(READ "${qt_hook_file}" qt_hook_contents)
-            # Add Cinnamon to list of DEs for GTK3 theming.
-            string(REPLACE
-                "*XFCE*"
-                "*X-Cinnamon*|*XFCE*"
-                qt_hook_contents "${qt_hook_contents}")
-            # Wayland backend crashes due to changed schemas in Gnome 40.
-            string(REPLACE
-                "export QT_QPA_PLATFORMTHEME=gtk3"
-                "export QT_QPA_PLATFORMTHEME=gtk3; export GDK_BACKEND=x11"
-                qt_hook_contents "${qt_hook_contents}")
-            file(WRITE "${qt_hook_file}" "${qt_hook_contents}")
+            message(FATAL_ERROR "linuxdeploy failed to create AppDir w/ exit code ${linuxdeploy_appdir_result}:\n${linuxdeploy_appdir_error}")
         endif()
 
         message(STATUS "Creating AppImage for executable ${executable_path}")
@@ -279,22 +264,12 @@ else()
         add_custom_target(bundle)
         add_custom_command(
             TARGET bundle
-            COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bundle/")
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bundle/"
+            POST_BUILD)
         add_custom_command(
             TARGET bundle
-            COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bundle/dist/")
-        add_custom_command(
-            TARGET bundle
-            COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_SOURCE_DIR}/dist/azahar.png" "${CMAKE_BINARY_DIR}/bundle/dist/azahar.png")
-        add_custom_command(
-            TARGET bundle
-            COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_SOURCE_DIR}/license.txt" "${CMAKE_BINARY_DIR}/bundle/")
-        add_custom_command(
-            TARGET bundle
-            COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_SOURCE_DIR}/README.md" "${CMAKE_BINARY_DIR}/bundle/")
-        add_custom_command(
-            TARGET bundle
-            COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/dist/scripting" "${CMAKE_BINARY_DIR}/bundle/scripting")
+            COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/dist/scripting" "${CMAKE_BINARY_DIR}/bundle/scripting"
+            POST_BUILD)
 
         # On Linux, add a command to prepare linuxdeploy and any required plugins before any bundling occurs.
         if (CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux")
@@ -305,7 +280,8 @@ else()
                 "-DLINUXDEPLOY_PATH=${CMAKE_BINARY_DIR}/externals/linuxdeploy"
                 "-DLINUXDEPLOY_ARCH=${CMAKE_HOST_SYSTEM_PROCESSOR}"
                 -P "${CMAKE_SOURCE_DIR}/CMakeModules/BundleTarget.cmake"
-                WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
+                WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
+                POST_BUILD)
         endif()
     endfunction()
 

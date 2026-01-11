@@ -1,4 +1,4 @@
-// Copyright 2023 Citra Emulator Project
+// Copyright Citra Emulator Project / Azahar Emulator Project
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
@@ -11,11 +11,13 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -30,15 +32,20 @@ import androidx.preference.PreferenceManager
 import androidx.viewpager2.widget.ViewPager2.OnPageChangeCallback
 import com.google.android.material.snackbar.Snackbar
 import com.google.android.material.transition.MaterialFadeThrough
+import org.citra.citra_emu.BuildConfig
 import org.citra.citra_emu.CitraApplication
+import org.citra.citra_emu.NativeLibrary
 import org.citra.citra_emu.R
 import org.citra.citra_emu.adapters.SetupAdapter
 import org.citra.citra_emu.databinding.FragmentSetupBinding
 import org.citra.citra_emu.features.settings.model.Settings
+import org.citra.citra_emu.model.ButtonState
+import org.citra.citra_emu.model.PageButton
+import org.citra.citra_emu.model.PageState
 import org.citra.citra_emu.model.SetupCallback
 import org.citra.citra_emu.model.SetupPage
-import org.citra.citra_emu.model.StepState
 import org.citra.citra_emu.ui.main.MainActivity
+import org.citra.citra_emu.utils.BuildUtil
 import org.citra.citra_emu.utils.CitraDirectoryHelper
 import org.citra.citra_emu.utils.GameHelper
 import org.citra.citra_emu.utils.PermissionsHandler
@@ -113,151 +120,261 @@ class SetupFragment : Fragment() {
                     0,
                     true,
                     R.string.get_started,
-                    { pageForward() }
-                )
-            )
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                add(
-                    SetupPage(
-                        R.drawable.ic_notification,
-                        R.string.notifications,
-                        R.string.notifications_description,
-                        0,
-                        false,
-                        R.string.give_permission,
-                        {
-                            notificationCallback = it
-                            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                        },
-                        false,
-                        true,
-                        {
-                            if (NotificationManagerCompat.from(requireContext())
-                                    .areNotificationsEnabled()
-                            ) {
-                                StepState.STEP_COMPLETE
-                            } else {
-                                StepState.STEP_INCOMPLETE
-                            }
-                        },
-                        R.string.notification_warning,
-                        R.string.notification_warning_description,
-                        0
-                    )
-                )
-            }
-
-            add(
-                SetupPage(
-                    R.drawable.ic_microphone,
-                    R.string.microphone_permission,
-                    R.string.microphone_permission_description,
-                    0,
-                    false,
-                    R.string.give_permission,
-                    {
-                        microphoneCallback = it
-                        permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                    },
-                    false,
-                    false,
-                    {
-                        if (
-                            ContextCompat.checkSelfPermission(
-                                requireContext(),
-                                Manifest.permission.RECORD_AUDIO
-                            ) == PackageManager.PERMISSION_GRANTED
-                        ) {
-                            StepState.STEP_COMPLETE
-                        } else {
-                            StepState.STEP_INCOMPLETE
-                        }
+                    pageButtons = mutableListOf<PageButton>().apply {
+                        add(
+                            PageButton(
+                                R.drawable.ic_arrow_forward,
+                                R.string.get_started,
+                                0,
+                                buttonAction = {
+                                    pageForward()
+                                },
+                                buttonState = {
+                                    ButtonState.BUTTON_ACTION_UNDEFINED
+                                }
+                            )
+                        )
                     }
                 )
             )
+
             add(
                 SetupPage(
-                    R.drawable.ic_camera,
-                    R.string.camera_permission,
-                    R.string.camera_permission_description,
+                    R.drawable.ic_permission,
+                    R.string.permissions,
+                    R.string.permissions_description,
                     0,
                     false,
-                    R.string.give_permission,
-                    {
-                        cameraCallback = it
-                        permissionLauncher.launch(Manifest.permission.CAMERA)
-                    },
-                    false,
-                    false,
-                    {
-                        if (
-                            ContextCompat.checkSelfPermission(
-                                requireContext(),
-                                Manifest.permission.CAMERA
-                            ) == PackageManager.PERMISSION_GRANTED
-                        ) {
-                            StepState.STEP_COMPLETE
-                        } else {
-                            StepState.STEP_INCOMPLETE
+                    0,
+                    pageButtons = mutableListOf<PageButton>().apply {
+                        if (!BuildUtil.isGooglePlayBuild) {
+                            add(
+                                PageButton(
+                                    R.drawable.ic_folder,
+                                    R.string.filesystem_permission,
+                                    R.string.filesystem_permission_description,
+                                    buttonAction = {
+                                        pageButtonCallback = it
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                            manageExternalStoragePermissionLauncher.launch(
+                                                Intent(
+                                                    android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                                                    Uri.fromParts(
+                                                        "package",
+                                                        requireActivity().packageName,
+                                                        null
+                                                    )
+                                                )
+                                            )
+                                        } else {
+                                            permissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                                        }
+                                    },
+                                    buttonState = {
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                            if (Environment.isExternalStorageManager()) {
+                                                ButtonState.BUTTON_ACTION_COMPLETE
+                                            } else {
+                                                ButtonState.BUTTON_ACTION_INCOMPLETE
+                                            }
+                                        } else {
+                                            if (ContextCompat.checkSelfPermission(
+                                                    requireContext(),
+                                                    Manifest.permission.WRITE_EXTERNAL_STORAGE
+                                                ) == PackageManager.PERMISSION_GRANTED
+                                            ) {
+                                                ButtonState.BUTTON_ACTION_COMPLETE
+                                            } else {
+                                                ButtonState.BUTTON_ACTION_INCOMPLETE
+                                            }
+                                        }
+                                    },
+                                    isUnskippable = true,
+                                    hasWarning = true,
+                                    R.string.filesystem_permission_warning,
+                                    R.string.filesystem_permission_warning_description,
+                                )
+                            )
                         }
-                    }
-                )
-            )
-            add(
-                SetupPage(
-                    R.drawable.ic_home,
-                    R.string.select_citra_user_folder,
-                    R.string.select_citra_user_folder_description,
-                    0,
-                    true,
-                    R.string.select,
-                    {
-                        userDirCallback = it
-                        openCitraDirectory.launch(null)
-                    },
-                    true,
-                    true,
-                    {
-                        if (PermissionsHandler.hasWriteAccess(requireContext())) {
-                            StepState.STEP_COMPLETE
-                        } else {
-                            StepState.STEP_INCOMPLETE
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                            add(
+                                PageButton(
+                                    R.drawable.ic_notification,
+                                    R.string.notifications,
+                                    R.string.notifications_description,
+                                    buttonAction = {
+                                        pageButtonCallback = it
+                                        permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                    },
+                                    buttonState = {
+                                        if (NotificationManagerCompat.from(requireContext())
+                                                .areNotificationsEnabled()
+                                        ) {
+                                            ButtonState.BUTTON_ACTION_COMPLETE
+                                        } else {
+                                            ButtonState.BUTTON_ACTION_INCOMPLETE
+                                        }
+                                    },
+                                    isUnskippable = false,
+                                    hasWarning = true,
+                                    R.string.notification_warning,
+                                    R.string.notification_warning_description,
+                                )
+                            )
                         }
-                    },
-                    R.string.cannot_skip,
-                    R.string.cannot_skip_directory_description,
-                    R.string.cannot_skip_directory_help
-                )
-            )
-            add(
-                SetupPage(
-                    R.drawable.ic_controller,
-                    R.string.games,
-                    R.string.games_description,
-                    0,
-                    true,
-                    R.string.select,
-                    {
-                        gamesDirCallback = it
-                        getGamesDirectory.launch(
-                            Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).data
+                        add(
+                            PageButton(
+                                R.drawable.ic_microphone,
+                                R.string.microphone_permission,
+                                R.string.microphone_permission_description,
+                                buttonAction = {
+                                    pageButtonCallback = it
+                                    permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                },
+                                buttonState = {
+                                    if (ContextCompat.checkSelfPermission(
+                                            requireContext(),
+                                            Manifest.permission.RECORD_AUDIO
+                                        ) == PackageManager.PERMISSION_GRANTED
+                                    ) {
+                                        ButtonState.BUTTON_ACTION_COMPLETE
+                                    } else {
+                                        ButtonState.BUTTON_ACTION_INCOMPLETE
+                                    }
+                                },
+                            )
+                        )
+                        add(
+                            PageButton(
+                                R.drawable.ic_camera,
+                                R.string.camera_permission,
+                                R.string.camera_permission_description,
+                                buttonAction = {
+                                    pageButtonCallback = it
+                                    permissionLauncher.launch(Manifest.permission.CAMERA)
+                                },
+                                buttonState = {
+                                    if (ContextCompat.checkSelfPermission(
+                                            requireContext(),
+                                            Manifest.permission.CAMERA
+                                        ) == PackageManager.PERMISSION_GRANTED
+                                    ) {
+                                        ButtonState.BUTTON_ACTION_COMPLETE
+                                    } else {
+                                        ButtonState.BUTTON_ACTION_INCOMPLETE
+                                    }
+                                },
+                            )
                         )
                     },
-                    false,
-                    true,
-                    {
-                        if (preferences.getString(GameHelper.KEY_GAME_PATH, "")!!.isNotEmpty()) {
-                            StepState.STEP_COMPLETE
+                ) {
+                    var permissionsComplete =
+                        // Microphone
+                        ContextCompat.checkSelfPermission(
+                            requireContext(),
+                            Manifest.permission.RECORD_AUDIO
+                        ) == PackageManager.PERMISSION_GRANTED &&
+                        // Camera
+                        ContextCompat.checkSelfPermission(
+                            requireContext(),
+                            Manifest.permission.CAMERA
+                        ) == PackageManager.PERMISSION_GRANTED &&
+                        // Notifications
+                        NotificationManagerCompat.from(requireContext())
+                            .areNotificationsEnabled()
+                    // External Storage
+                    if (!BuildUtil.isGooglePlayBuild) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                            permissionsComplete =
+                                (permissionsComplete && Environment.isExternalStorageManager())
                         } else {
-                            StepState.STEP_INCOMPLETE
+                            permissionsComplete =
+                                (permissionsComplete && ContextCompat.checkSelfPermission(
+                                    requireContext(),
+                                    Manifest.permission.WRITE_EXTERNAL_STORAGE
+                                ) == PackageManager.PERMISSION_GRANTED)
                         }
-                    },
-                    R.string.add_games_warning,
-                    R.string.add_games_warning_description,
-                    R.string.add_games_warning_help
-                )
+                    }
+
+                    if (permissionsComplete) {
+                        PageState.PAGE_STEPS_COMPLETE
+                    } else {
+                        PageState.PAGE_STEPS_INCOMPLETE
+                    }
+                }
             )
+
+            add(
+                SetupPage(
+                    R.drawable.ic_folder,
+                    R.string.select_emulator_data_folders,
+                    R.string.select_emulator_data_folders_description,
+                    0,
+                    true,
+                    R.string.select,
+                    pageButtons = mutableListOf<PageButton>().apply {
+                        add(
+                            PageButton(
+                                R.drawable.ic_home,
+                                R.string.select_citra_user_folder,
+                                R.string.select_citra_user_folder_description,
+                                buttonAction = {
+                                    pageButtonCallback = it
+                                    PermissionsHandler.compatibleSelectDirectory(openCitraDirectory)
+                                },
+                                buttonState = {
+                                    if (PermissionsHandler.hasWriteAccess(requireContext())) {
+                                        ButtonState.BUTTON_ACTION_COMPLETE
+                                    } else {
+                                        ButtonState.BUTTON_ACTION_INCOMPLETE
+                                    }
+                                },
+                                isUnskippable = true,
+                                hasWarning = false,
+                                R.string.cannot_skip,
+                                R.string.cannot_skip_directory_description,
+                                R.string.cannot_skip_directory_help
+
+                            )
+                        )
+                        add(
+                            PageButton(
+                                R.drawable.ic_controller,
+                                R.string.games,
+                                R.string.games_description,
+                                buttonAction =  {
+                                    pageButtonCallback = it
+                                    getGamesDirectory.launch(
+                                        Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).data
+                                    )
+                                },
+                                buttonState = {
+                                    if (preferences.getString(GameHelper.KEY_GAME_PATH, "")!!.isNotEmpty()) {
+                                        ButtonState.BUTTON_ACTION_COMPLETE
+                                    } else {
+                                        ButtonState.BUTTON_ACTION_INCOMPLETE
+                                    }
+                                },
+                                isUnskippable = false,
+                                hasWarning = true,
+                                R.string.add_games_warning,
+                                R.string.add_games_warning_description,
+                            )
+                        )
+                    },
+                ) {
+                    if (
+                        PermissionsHandler.hasWriteAccess(requireContext()) &&
+                        preferences.getString(GameHelper.KEY_GAME_PATH, "")!!.isNotEmpty()
+                    ) {
+                        PageState.PAGE_STEPS_COMPLETE
+
+                    } else {
+                        PageState.PAGE_STEPS_INCOMPLETE
+                    }
+                }
+            )
+
             add(
                 SetupPage(
                     R.drawable.ic_check,
@@ -266,7 +383,21 @@ class SetupFragment : Fragment() {
                     R.drawable.ic_arrow_forward,
                     false,
                     R.string.text_continue,
-                    { finishSetup() }
+                    pageButtons = mutableListOf<PageButton>().apply {
+                        add(
+                            PageButton(
+                                R.drawable.ic_arrow_forward,
+                                R.string.text_continue,
+                                0,
+                                buttonAction = {
+                                    finishSetup()
+                                },
+                                buttonState = {
+                                    ButtonState.BUTTON_ACTION_UNDEFINED
+                                }
+                            )
+                        )
+                    }
                 )
             )
         }
@@ -303,34 +434,46 @@ class SetupFragment : Fragment() {
             val index = binding.viewPager2.currentItem
             val currentPage = pages[index]
 
-            // Checks if the user has completed the task on the current page
-            if (currentPage.hasWarning || currentPage.isUnskippable) {
-                val stepState = currentPage.stepCompleted.invoke()
-                if (stepState == StepState.STEP_COMPLETE ||
-                    stepState == StepState.STEP_UNDEFINED
-                ) {
-                    pageForward()
-                    return@setOnClickListener
-                }
+            // This allows multiple sets of warning messages to be displayed on the same dialog if necessary
+            val warningMessages =
+                mutableListOf<Triple<Int, Int, Int>>() // title, description, helpLink
 
-                if (currentPage.isUnskippable) {
-                    MessageDialogFragment.newInstance(
-                        currentPage.warningTitleId,
-                        currentPage.warningDescriptionId,
-                        currentPage.warningHelpLinkId
-                    ).show(childFragmentManager, MessageDialogFragment.TAG)
-                    return@setOnClickListener
-                }
+            currentPage.pageButtons?.forEach { button ->
+                if (button.hasWarning || button.isUnskippable) {
+                    val buttonState = button.buttonState()
+                    if (buttonState == ButtonState.BUTTON_ACTION_COMPLETE) {
+                        return@forEach
+                    }
 
-                if (!hasBeenWarned[index]) {
-                    SetupWarningDialogFragment.newInstance(
-                        currentPage.warningTitleId,
-                        currentPage.warningDescriptionId,
-                        currentPage.warningHelpLinkId,
-                        index
-                    ).show(childFragmentManager, SetupWarningDialogFragment.TAG)
-                    return@setOnClickListener
+                    if (button.isUnskippable) {
+                        MessageDialogFragment.newInstance(
+                            button.warningTitleId,
+                            button.warningDescriptionId,
+                            button.warningHelpLinkId
+                        ).show(childFragmentManager, MessageDialogFragment.TAG)
+                        return@setOnClickListener
+                    }
+
+                    if (!hasBeenWarned[index]) {
+                        warningMessages.add(
+                            Triple(
+                                button.warningTitleId,
+                                button.warningDescriptionId,
+                                button.warningHelpLinkId
+                            )
+                        )
+                    }
                 }
+            }
+
+            if (warningMessages.isNotEmpty()) {
+                SetupWarningDialogFragment.newInstance(
+                    warningMessages.map { it.first }.toIntArray(),
+                    warningMessages.map { it.second }.toIntArray(),
+                    warningMessages.map { it.third }.toIntArray(),
+                    index
+                ).show(childFragmentManager, SetupWarningDialogFragment.TAG)
+                return@setOnClickListener
             }
             pageForward()
         }
@@ -366,35 +509,55 @@ class SetupFragment : Fragment() {
         _binding = null
     }
 
-    private lateinit var notificationCallback: SetupCallback
-    private lateinit var microphoneCallback: SetupCallback
-    private lateinit var cameraCallback: SetupCallback
+    private lateinit var pageButtonCallback: SetupCallback
+    private val checkForButtonState: () -> Unit = {
+        val page = pages[binding.viewPager2.currentItem]
+        page.pageButtons?.forEach {
+            if (it.buttonState() == ButtonState.BUTTON_ACTION_COMPLETE) {
+                pageButtonCallback.onStepCompleted(it.titleId, pageFullyCompleted = false)
+            }
+
+            if (page.pageSteps() == PageState.PAGE_STEPS_COMPLETE) {
+                pageButtonCallback.onStepCompleted(0, pageFullyCompleted = true)
+            }
+        }
+    }
+
+    private fun showPermissionDeniedSnackbar() {
+        Snackbar.make(binding.root, R.string.permission_denied, Snackbar.LENGTH_LONG)
+            .setAnchorView(binding.buttonNext)
+            .setAction(R.string.grid_menu_core_settings) {
+                val intent =
+                    Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                val uri = Uri.fromParts("package", requireActivity().packageName, null)
+                intent.data = uri
+                startActivity(intent)
+            }
+            .show()
+    }
 
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
             if (isGranted) {
-                val page = pages[binding.viewPager2.currentItem]
-                when (page.titleId) {
-                    R.string.notifications -> notificationCallback.onStepCompleted()
-                    R.string.microphone_permission -> microphoneCallback.onStepCompleted()
-                    R.string.camera_permission -> cameraCallback.onStepCompleted()
-                }
+                checkForButtonState.invoke()
                 return@registerForActivityResult
             }
 
-            Snackbar.make(binding.root, R.string.permission_denied, Snackbar.LENGTH_LONG)
-                .setAnchorView(binding.buttonNext)
-                .setAction(R.string.grid_menu_core_settings) {
-                    val intent =
-                        Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-                    val uri = Uri.fromParts("package", requireActivity().packageName, null)
-                    intent.data = uri
-                    startActivity(intent)
-                }
-                .show()
+            showPermissionDeniedSnackbar()
         }
 
-    private lateinit var userDirCallback: SetupCallback
+    // We can't use permissionLauncher because MANAGE_EXTERNAL_STORAGE is a special snowflake
+    @RequiresApi(Build.VERSION_CODES.R)
+    private val manageExternalStoragePermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            BuildUtil.assertNotGooglePlay()
+            if (Environment.isExternalStorageManager()) {
+                checkForButtonState.invoke()
+                return@registerForActivityResult
+            }
+
+            showPermissionDeniedSnackbar()
+        }
 
     private val openCitraDirectory = registerForActivityResult<Uri, Uri>(
         ActivityResultContracts.OpenDocumentTree()
@@ -403,10 +566,19 @@ class SetupFragment : Fragment() {
             return@registerForActivityResult
         }
 
-        CitraDirectoryHelper(requireActivity()).showCitraDirectoryDialog(result, userDirCallback)
-    }
+        if (!BuildUtil.isGooglePlayBuild) {
+            if (NativeLibrary.getUserDirectory(result) == "") {
+                SelectUserDirectoryDialogFragment.newInstance(
+                    mainActivity,
+                    R.string.invalid_selection,
+                    R.string.invalid_user_directory
+                ).show(mainActivity.supportFragmentManager, SelectUserDirectoryDialogFragment.TAG)
+                return@registerForActivityResult
+            }
+        }
 
-    private lateinit var gamesDirCallback: SetupCallback
+        CitraDirectoryHelper(requireActivity(), true).showCitraDirectoryDialog(result, pageButtonCallback, checkForButtonState)
+    }
 
     private val getGamesDirectory =
         registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { result ->
@@ -427,7 +599,7 @@ class SetupFragment : Fragment() {
 
             homeViewModel.setGamesDir(requireActivity(), result.path!!)
 
-            gamesDirCallback.onStepCompleted()
+            checkForButtonState.invoke()
         }
 
     private fun finishSetup() {

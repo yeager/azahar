@@ -24,6 +24,7 @@
 #include "citra_qt/user_data_migration.h"
 #include "core/core.h"
 #include "core/savestate.h"
+#include "video_core/rasterizer_interface.h"
 
 // Needs to be included at the end due to https://bugreports.qt.io/browse/QTBUG-73263
 #include <filesystem>
@@ -140,6 +141,7 @@ signals:
 
     void UpdateProgress(std::size_t written, std::size_t total);
     void CIAInstallReport(Service::AM::InstallStatus status, QString filepath);
+    void CompressFinished(bool is_compress, bool success);
     void CIAInstallFinished();
     // Signal that tells widgets to update icons to use the current theme
     void UpdateThemedIcons();
@@ -222,7 +224,6 @@ private:
 
 private slots:
     void OnStartGame();
-    void GetInitialFrameLimit();
     void OnRestartGame();
     void OnPauseGame();
     void OnPauseContinueGame();
@@ -248,6 +249,7 @@ private slots:
     void OnMenuBootHomeMenu(u32 region);
     void OnUpdateProgress(std::size_t written, std::size_t total);
     void OnCIAInstallReport(Service::AM::InstallStatus status, QString filepath);
+    void OnCompressFinished(bool is_compress, bool success);
     void OnCIAInstallFinished();
     void OnMenuRecentFile();
     void OnConfigure();
@@ -261,7 +263,9 @@ private slots:
     void ToggleSecondaryFullscreen();
     void ChangeScreenLayout();
     void ChangeSmallScreenPosition();
-    void ToggleEmulationSpeed();
+    bool IsTurboEnabled();
+    void SetTurboEnabled(bool);
+    void ReloadTurbo();
     void AdjustSpeedLimit(bool increase);
     void UpdateSecondaryWindowVisibility();
     void ToggleScreenLayout();
@@ -279,6 +283,8 @@ private slots:
     void OnSaveMovie();
     void OnCaptureScreenshot();
     void OnDumpVideo();
+    void OnCompressFile();
+    void OnDecompressFile();
 #ifdef _WIN32
     void OnOpenFFmpeg();
 #endif
@@ -298,6 +304,9 @@ private slots:
 #ifdef ENABLE_QT_UPDATE_CHECKER
     void OnEmulatorUpdateAvailable();
 #endif
+    void OnSwitchDiskResources(VideoCore::LoadCallbackStage stage, std::size_t value,
+                               std::size_t total);
+    void StartLaunchStressTest(const QString& game_path);
 
 private:
     Q_INVOKABLE void OnMoviePlaybackCompleted();
@@ -333,6 +342,7 @@ private:
     QProgressBar* progress_bar = nullptr;
     QLabel* message_label = nullptr;
     bool show_artic_label = false;
+    QLabel* loading_shaders_label = nullptr;
     QLabel* artic_traffic_label = nullptr;
     QLabel* emu_speed_label = nullptr;
     QLabel* game_fps_label = nullptr;
@@ -410,8 +420,6 @@ private:
     u64 oldest_slot_time;
     u32 newest_slot;
     u64 newest_slot_time;
-
-    int initial_frame_limit;
 
     // Secondary window actions
     QAction* action_secondary_fullscreen;

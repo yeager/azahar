@@ -1,7 +1,9 @@
 ![Azahar Emulator](https://azahar-emu.org/resources/images/logo/azahar-name-and-logo.svg)
 
 ![GitHub Release](https://img.shields.io/github/v/release/azahar-emu/azahar?label=Current%20Release)
-![GitHub Downloads](https://img.shields.io/github/downloads/azahar-emu/azahar/total?logo=github&label=GitHub%20Downloads) <!-- ![Flathub Downloads](https://img.shields.io/flathub/downloads/org.azahar-emu.azahar?logo=Flathub&label=Flathub%20Downloads) -->
+![GitHub Downloads](https://img.shields.io/github/downloads/azahar-emu/azahar/total?logo=github&label=GitHub%20Downloads)
+![Google Play Downloads](https://playbadges.pavi2410.com/badge/downloads?id=io.github.lime3ds.android&pretty&label=Play%20Store%20Downloads)
+![Flathub Downloads](https://img.shields.io/flathub/downloads/org.azahar_emu.Azahar?logo=flathub&label=Flathub%20Downloads)
 ![CI Build Status](https://github.com/azahar-emu/azahar/actions/workflows/build.yml/badge.svg)
 
 <b>Azahar</b> is an open-source 3DS emulator project based on Citra.
@@ -18,15 +20,21 @@ Download the latest release from [Releases](https://github.com/azahar-emu/azahar
 
 If you are unsure of whether you want to use MSYS2 or MSVC, use MSYS2.
 
+---
 ### MacOS
 
-Download the latest release from [Releases](https://github.com/azahar-emu/azahar/releases).
+To download a build that will work on all Macs, you can download the `macos-universal` build on the [Releases](https://github.com/azahar-emu/azahar/releases) page.
 
-The `macos-universal` download will work on both Intel and Apple Silicon Macs.
+Alternatively, if you wish to download a build specifically for your Mac, you can choose either:
+
+- `macos-arm64` for Apple Silicon Macs
+- `macos-x86_64` for Intel Macs
 
 ---
 ### Android
-The recommended method of downloading Azahar on Android is via the [Google Play store](https://play.google.com/store/apps/details?id=io.github.lime3ds.android).
+The recommended method of downloading Azahar on Android is via the Google Play store:
+
+<a href='https://play.google.com/store/apps/details?id=io.github.lime3ds.android'><img width='180' alt='Get it on Google Play' src='https://raw.githubusercontent.com/pioug/google-play-badges/06ccd9252af1501613da2ca28eaffe31307a4e6d/svg/English.svg'/></a>
 
 Alternatively, you can install the app using Obtainium:
 1. Download and install Obtainium from [here](https://github.com/ImranR98/Obtainium/releases) (use the file named `app-release.apk`)
@@ -42,14 +50,17 @@ Keep in mind that you will not recieve automatic updates when installing via the
 ---
 ### Linux
 
-Azahar is available as an AppImage on the [Releases](https://github.com/azahar-emu/azahar/releases) page.
+The recommended format for using Azahar on Linux is the Flatpak available on Flathub:
 
-A Flatpak distribution is currently being worked on.
-<!--
-We are also on Flathub:
+<a href='https://flathub.org/apps/org.azahar_emu.Azahar'><img width='180' alt='Download on Flathub' src='https://dl.flathub.org/assets/badges/flathub-badge-en.png'/></a>
 
-<a href=https://flathub.org/apps/org.azahar-emu.azahar><img width='180' alt='Download on Flathub' src='https://dl.flathub.org/assets/badges/flathub-badge-en.png'/></a>
--->
+Azahar is also available as an AppImage on the [Releases](https://github.com/azahar-emu/azahar/releases) page.
+
+If you are unsure of which variant to use, we recommend using the default `azahar.AppImage`. This is because of upstream issues in the Wayland ecosystem which may cause problems when running the emulator (e.g. [#1162](https://github.com/azahar-emu/azahar/issues/1162)).
+
+Unless you explicitly require native Wayland support (e.g. you are running a system with no Xwayland), the non-Wayland variant is recommended.
+
+If you are using the Flatpak and run into issues with Wayland, you can disable Wayland support for the Azahar Flatpak using [Flatseal](https://flathub.org/en/apps/com.github.tchx84.Flatseal).
 
 # Build instructions
 
@@ -85,7 +96,7 @@ Below are the minimum requirements to run Azahar:
 
 ### Desktop
 ```
-Operating System: Windows 10 (64-bit), MacOS 13 (Ventura), or modern 64-bit Linux
+Operating System: Windows 10 (64-bit), MacOS 13.4 (Ventura), or modern 64-bit Linux
 CPU: x86-64/ARM64 CPU (Windows for ARM not supported). Single core performance higher than 1,800 on Passmark
 GPU: OpenGL 4.3 or Vulkan 1.1 support
 Memory: 2GB of RAM. 4GB is recommended

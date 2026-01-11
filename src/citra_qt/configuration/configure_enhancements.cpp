@@ -1,4 +1,4 @@
-// Copyright 2019 Citra Emulator Project
+// Copyright Citra Emulator Project / Azahar Emulator Project
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
@@ -57,6 +57,7 @@ void ConfigureEnhancements::SetConfiguration() {
 
     ui->render_3d_combobox->setCurrentIndex(
         static_cast<int>(Settings::values.render_3d.GetValue()));
+    ui->swap_eyes_3d->setChecked(Settings::values.swap_eyes_3d.GetValue());
     ui->factor_3d->setValue(Settings::values.factor_3d.GetValue());
     ui->mono_rendering_eye->setCurrentIndex(
         static_cast<int>(Settings::values.mono_render_option.GetValue()));
@@ -75,7 +76,7 @@ void ConfigureEnhancements::updateShaders(Settings::StereoRenderOption stereo_op
 
     if (stereo_option == Settings::StereoRenderOption::Interlaced ||
         stereo_option == Settings::StereoRenderOption::ReverseInterlaced) {
-        ui->shader_combobox->addItem(QStringLiteral("horizontal (builtin)"));
+        ui->shader_combobox->addItem(QStringLiteral("Horizontal (builtin)"));
         ui->shader_combobox->setCurrentIndex(0);
         ui->shader_combobox->setEnabled(false);
         return;
@@ -83,10 +84,10 @@ void ConfigureEnhancements::updateShaders(Settings::StereoRenderOption stereo_op
 
     std::string current_shader;
     if (stereo_option == Settings::StereoRenderOption::Anaglyph) {
-        ui->shader_combobox->addItem(QStringLiteral("dubois (builtin)"));
+        ui->shader_combobox->addItem(QStringLiteral("Dubois (builtin)"));
         current_shader = Settings::values.anaglyph_shader_name.GetValue();
     } else {
-        ui->shader_combobox->addItem(QStringLiteral("none (builtin)"));
+        ui->shader_combobox->addItem(QStringLiteral("None (builtin)"));
         current_shader = Settings::values.pp_shader_name.GetValue();
     }
 
@@ -111,6 +112,7 @@ void ConfigureEnhancements::ApplyConfiguration() {
                                              ui->resolution_factor_combobox);
     Settings::values.render_3d =
         static_cast<Settings::StereoRenderOption>(ui->render_3d_combobox->currentIndex());
+    Settings::values.swap_eyes_3d = ui->swap_eyes_3d->isChecked();
     Settings::values.factor_3d = ui->factor_3d->value();
     Settings::values.mono_render_option =
         static_cast<Settings::MonoRenderOption>(ui->mono_rendering_eye->currentIndex());

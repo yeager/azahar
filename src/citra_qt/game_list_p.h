@@ -1,7 +1,6 @@
-// Copyright 2015 Citra Emulator Project
+// Copyright Citra Emulator Project / Azahar Emulator Project
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
-
 #pragma once
 
 #include <algorithm>
@@ -18,11 +17,11 @@
 #include <QStandardItem>
 #include <QString>
 #include <QWidget>
-#include "citra_qt/play_time_manager.h"
 #include "citra_qt/uisettings.h"
 #include "citra_qt/util/util.h"
 #include "common/file_util.h"
 #include "common/logging/log.h"
+#include "common/play_time_manager.h"
 #include "common/string_util.h"
 #include "core/loader/smdh.h"
 
@@ -160,15 +159,18 @@ public:
     static constexpr int ExtdataIdRole = SortRole + 4;
     static constexpr int LongTitleRole = SortRole + 5;
     static constexpr int MediaTypeRole = SortRole + 6;
+    static constexpr int CanInsertRole = SortRole + 7;
 
     GameListItemPath() = default;
     GameListItemPath(const QString& game_path, std::span<const u8> smdh_data, u64 program_id,
-                     u64 extdata_id, Service::FS::MediaType media_type, bool is_encrypted) {
+                     u64 extdata_id, Service::FS::MediaType media_type, bool is_encrypted,
+                     bool can_insert) {
         setData(type(), TypeRole);
         setData(game_path, FullPathRole);
         setData(qulonglong(program_id), ProgramIdRole);
         setData(qulonglong(extdata_id), ExtdataIdRole);
         setData(quint32(media_type), MediaTypeRole);
+        setData(quint32(can_insert), CanInsertRole);
 
         if (UISettings::values.game_list_icon_size.GetValue() ==
             UISettings::GameListIconSize::NoIcon) {
@@ -382,7 +384,7 @@ public:
 
     void setData(const QVariant& value, int role) override {
         qulonglong time_seconds = value.toULongLong();
-        GameListItem::setData(PlayTime::ReadablePlayTime(time_seconds), Qt::DisplayRole);
+        GameListItem::setData(ReadableDuration(time_seconds), Qt::DisplayRole);
         GameListItem::setData(value, PlayTimeRole);
     }
 

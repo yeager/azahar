@@ -105,6 +105,15 @@ struct ImportContentContext {
 };
 static_assert(sizeof(ImportContentContext) == 0x18, "Invalid ImportContentContext size");
 
+struct TitleInfo {
+    u64_le tid;
+    u64_le size;
+    u16_le version;
+    u16_le unused;
+    u32_le type;
+};
+static_assert(sizeof(TitleInfo) == 0x18, "Title info structure size is wrong");
+
 // Title ID valid length
 constexpr std::size_t TITLE_ID_VALID_LENGTH = 16;
 
@@ -170,19 +179,35 @@ void AuthorizeCIAFileDecryption(CIAFile* cia_file, Kernel::HLERequestContext& ct
 // A file handled returned for CIAs to be written into and subsequently installed.
 class CIAFile final : public FileSys::FileBackend {
 public:
+    class InstallResult {
+    public:
+        enum class Type {
+            NONE,
+            TIK,
+            TMD,
+            APP,
+        };
+        Type type{Type::NONE};
+        std::string install_full_path{};
+        Result result{0};
+    };
+
     explicit CIAFile(Core::System& system_, Service::FS::MediaType media_type,
                      bool from_cdn = false);
     ~CIAFile();
 
     ResultVal<std::size_t> Read(u64 offset, std::size_t length, u8* buffer) const override;
-    Result WriteTicket();
-    Result WriteTitleMetadata(std::span<const u8> tmd_data, std::size_t offset);
+    InstallResult WriteTicket();
+    InstallResult WriteTitleMetadata(std::span<const u8> tmd_data, std::size_t offset);
     ResultVal<std::size_t> WriteContentData(u64 offset, std::size_t length, const u8* buffer);
     ResultVal<std::size_t> Write(u64 offset, std::size_t length, bool flush, bool update_timestamp,
                                  const u8* buffer) override;
 
+    Result PrepareToImportContent(const FileSys::TitleMetadata& tmd);
     Result ProvideTicket(const FileSys::Ticket& ticket);
+    Result ProvideTMDForAdditionalContent(const FileSys::TitleMetadata& tmd);
     const FileSys::TitleMetadata& GetTMD();
+    FileSys::Ticket& GetTicket();
     CIAInstallState GetCiaInstallState() {
         return install_state;
     }
@@ -199,6 +224,15 @@ public:
         is_done = true;
     }
 
+    void Cancel() {
+        is_cancel = true;
+        Close();
+    }
+
+    const std::vector<InstallResult>& GetInstallResults() const {
+        return install_results;
+    }
+
 private:
     friend void AuthorizeCIAFileDecryption(CIAFile* cia_file, Kernel::HLERequestContext& ctx);
     Core::System& system;
@@ -208,6 +242,8 @@ private:
     bool decryption_authorized;
     bool is_done = false;
     bool is_closed = false;
+    bool is_cancel = false;
+    bool is_additional_content = false;
 
     // Whether it's installing an update, and what step of installation it is at
     bool is_update = false;
@@ -223,6 +259,8 @@ private:
     std::vector<std::string> content_file_paths;
     u16 current_content_index = -1;
     std::unique_ptr<NCCHCryptoFile> current_content_file;
+    InstallResult current_content_install_result{};
+    std::vector<InstallResult> install_results;
     Service::FS::MediaType media_type;
 
     class DecryptionState;
@@ -233,11 +271,13 @@ class CurrentImportingTitle {
 public:
     explicit CurrentImportingTitle(Core::System& system_, u64 title_id_,
                                    Service::FS::MediaType media_type_)
-        : cia_file(system_, media_type_, true), title_id(title_id_), media_type(media_type_) {}
+        : cia_file(system_, media_type_, true), title_id(title_id_), media_type(media_type_),
+          tmd_provided(false) {}
 
     CIAFile cia_file;
     u64 title_id;
     Service::FS::MediaType media_type;
+    bool tmd_provided;
 };
 
 // A file handled returned for Tickets to be written into and subsequently installed.
@@ -333,6 +373,19 @@ private:
  */
 InstallStatus InstallCIA(const std::string& path,
                          std::function<ProgressCallback>&& update_callback = nullptr);
+
+/**
+ * Checks if the provided path is a valid CIA file
+ * that can be installed.
+ * @param path file path of the CIA file to check to install
+ */
+InstallStatus CheckCIAToInstall(const std::string& path, bool& is_compressed,
+                                bool check_encryption);
+
+/**
+ * Get CIA metadata information from file.
+ */
+ResultVal<std::pair<TitleInfo, std::unique_ptr<Loader::SMDH>>> GetCIAInfos(const std::string& path);
 
 /**
  * Get the update title ID for a title
@@ -769,6 +822,17 @@ public:
         void BeginImportProgramTemporarily(Kernel::HLERequestContext& ctx);
 
         /**
+         * AM::CancelImportProgram service function
+         * Cancel importing a CTR Installable Archive
+         *  Inputs:
+         *      0 : Command header (0x04040002)
+         *      1-2 : CIAFile handle application wrote to
+         *  Outputs:
+         *      1 : Result, 0 on success, otherwise error code
+         */
+        void CancelImportProgram(Kernel::HLERequestContext& ctx);
+
+        /**
          * AM::EndImportProgram service function
          * Finish importing from a CTR Installable Archive
          *  Inputs:
@@ -1004,6 +1068,16 @@ public:
         void GetNumTicketsOfProgram(Kernel::HLERequestContext& ctx);
 
         void ListTicketInfos(Kernel::HLERequestContext& ctx);
+
+        void GetNumCurrentContentInfos(Kernel::HLERequestContext& ctx);
+
+        void FindCurrentContentInfos(Kernel::HLERequestContext& ctx);
+
+        void ListCurrentContentInfos(Kernel::HLERequestContext& ctx);
+
+        void CalculateContextRequiredSize(Kernel::HLERequestContext& ctx);
+
+        void UpdateImportContentContexts(Kernel::HLERequestContext& ctx);
 
         void ExportTicketWrapped(Kernel::HLERequestContext& ctx);
 

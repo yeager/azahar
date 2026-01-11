@@ -1,4 +1,4 @@
-// Copyright Citra Emulator Project / Lime3DS Emulator Project
+// Copyright Citra Emulator Project / Azahar Emulator Project
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
@@ -25,8 +25,11 @@ class Game(
     val isInstalled: Boolean = false,
     val isSystemTitle: Boolean = false,
     val isVisibleSystemTitle: Boolean = false,
+    val isInsertable: Boolean = false,
     val icon: IntArray? = null,
-    val filename: String
+    val fileType: String = "",
+    val isCompressed: Boolean = false,
+    val filename: String,
 ) : Parcelable {
     val keyAddedToLibraryTime get() = "${filename}_AddedToLibraryTime"
     val keyLastPlayedTime get() = "${filename}_LastPlayed"
@@ -63,7 +66,7 @@ class Game(
         val allExtensions: Set<String> get() = extensions + badExtensions
 
         val extensions: Set<String> = HashSet(
-            listOf("3dsx", "elf", "axf", "cci", "cxi", "app")
+            listOf("3dsx", "app", "axf", "cci", "cxi", "elf", "z3dsx", "zcci", "zcxi")
         )
 
         val badExtensions: Set<String> = HashSet(

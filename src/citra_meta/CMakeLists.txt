@@ -60,6 +60,10 @@ if (ENABLE_QT AND UNIX AND NOT APPLE)
     target_link_libraries(citra_meta PRIVATE Qt6::DBus gamemode)
 endif()
 
+if (ENABLE_QT AND APPLE)
+    target_link_libraries(citra_meta PRIVATE Qt6::GuiPrivate)
+endif()
+
 if (ENABLE_QT AND USE_DISCORD_PRESENCE)
     target_link_libraries(citra_meta PRIVATE discord-rpc)
 endif()
@@ -75,6 +79,10 @@ endif()
 
 if (CITRA_USE_PRECOMPILED_HEADERS)
     target_precompile_headers(citra_meta PRIVATE precompiled_headers.h)
+endif()
+
+if (SSE42_COMPILE_OPTION)
+    target_compile_definitions(citra_meta PRIVATE CITRA_HAS_SSE42)
 endif()
 
 # Bundle in-place on MSVC so dependencies can be resolved by builds.

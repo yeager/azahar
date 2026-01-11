@@ -144,7 +144,7 @@ void HostRoomWindow::Host() {
             bool created = room->Create(ui->room_name->text().toStdString(),
                                         ui->room_description->toPlainText().toStdString(), "",
                                         static_cast<u16>(port), password, ui->max_player->value(),
-                                        NetSettings::values.citra_username, game_name.toStdString(),
+                                        ui->username->text().toStdString(), game_name.toStdString(),
                                         game_id, CreateVerifyBackend(is_public), ban_list);
             if (!created) {
                 NetworkMessage::ErrorManager::ShowError(
@@ -193,8 +193,8 @@ void HostRoomWindow::Host() {
         }
 #endif
         member->Join(ui->username->text().toStdString(), Service::CFG::GetConsoleIdHash(system),
-                     "127.0.0.1", static_cast<u16>(port), 0, Network::NoPreferredMac, password,
-                     token);
+                     "127.0.0.1", static_cast<u16>(port), 0,
+                     Service::CFG::GetConsoleMacAddress(system), password, token);
 
         // Store settings
         UISettings::values.room_nickname = ui->username->text();

@@ -28,8 +28,9 @@
 #include "video_core/renderer_software/renderer_software.h"
 
 #ifdef ENABLE_OPENGL
-#include <glad/glad.h>
-
+// clang-format off
+#include <glad/glad.h> // Must be included first
+// clang-format on
 #include <QOffscreenSurface>
 #include <QOpenGLContext>
 #endif
@@ -37,9 +38,7 @@
 #if defined(__APPLE__)
 #include <objc/message.h>
 #include <objc/objc.h>
-#endif
-
-#if !defined(WIN32)
+#elif !defined(WIN32)
 #include <qpa/qplatformnativeinterface.h>
 #endif
 
@@ -72,9 +71,14 @@ void EmuThread::run() {
                              std::size_t total) { emit LoadProgress(stage, value, total); });
     }
 
+    system.GPU().Renderer().Rasterizer()->SetSwitchDiskResourcesCallback(
+        [this](VideoCore::LoadCallbackStage stage, std::size_t value, std::size_t total) {
+            emit SwitchDiskResources(stage, value, total);
+        });
+
     emit LoadProgress(VideoCore::LoadCallbackStage::Prepare, 0, 0);
 
-    system.GPU().Renderer().Rasterizer()->LoadDiskResources(
+    system.GPU().Renderer().Rasterizer()->LoadDefaultDiskResources(
         stop_run, [this](VideoCore::LoadCallbackStage stage, std::size_t value, std::size_t total) {
             emit LoadProgress(stage, value, total);
         });
@@ -750,7 +754,7 @@ bool GRenderWindow::InitializeOpenGL() {
     child->SetContext(std::move(child_context));
 
     auto format = child_widget->windowHandle()->format();
-    format.setSwapInterval(Settings::values.use_vsync_new.GetValue());
+    format.setSwapInterval(Settings::values.use_vsync.GetValue());
     child_widget->windowHandle()->setFormat(format);
 
     return true;

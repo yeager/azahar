@@ -104,7 +104,7 @@
         <item>
          <widget class="QCheckBox" name="toggle_console">
           <property name="text">
-           <string>Show Log Console (Windows Only)</string>
+           <string>Show log output in console</string>
           </property>
          </widget>
         </item>
@@ -278,6 +278,16 @@
          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Forces all async operations to run on the main thread, making them deterministic. Do not enable if you don't know what you are doing.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
         </property>
        </widget>
+      </item>
+      <item row="3" column="0">
+        <widget class="QCheckBox" name="enable_rpc_server">
+          <property name="text">
+            <string>Enable RPC server</string>
+          </property>
+          <property name="toolTip">
+            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Enables the RPC server on port 45987. This allows remotely reading/writing guest memory, do not enable if you don't know what you are doing.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+          </property>
+        </widget>
       </item>
      </layout>
     </widget>

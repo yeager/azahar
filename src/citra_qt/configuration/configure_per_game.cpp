@@ -40,7 +40,7 @@ ConfigurePerGame::ConfigurePerGame(QWidget* parent, u64 title_id_, const QString
 
     const bool is_powered_on = system.IsPoweredOn();
     audio_tab = std::make_unique<ConfigureAudio>(is_powered_on, this);
-    general_tab = std::make_unique<ConfigureGeneral>(is_powered_on, this);
+    general_tab = std::make_unique<ConfigureGeneral>(this);
     enhancements_tab = std::make_unique<ConfigureEnhancements>(this);
     layout_tab = std::make_unique<ConfigureLayout>(this);
     graphics_tab =
@@ -173,8 +173,8 @@ void ConfigurePerGame::LoadConfiguration() {
 
     ui->display_filepath->setText(QString::fromStdString(filename));
 
-    ui->display_format->setText(
-        QString::fromStdString(Loader::GetFileTypeString(loader->GetFileType())));
+    ui->display_format->setText(QString::fromStdString(
+        Loader::GetFileTypeString(loader->GetFileType(), loader->IsFileCompressed())));
 
     const auto valueText = ReadableByteSize(FileUtil::GetSize(filename));
     ui->display_size->setText(valueText);

@@ -54,6 +54,7 @@ enum class PortraitLayoutOption : u32 {
     PortraitOriginal
 };
 
+enum class SecondaryDisplayLayout : u32 { None, TopScreenOnly, BottomScreenOnly, SideBySide };
 /** Defines where the small screen will appear relative to the large screen
  * when in Large Screen mode
  */
@@ -71,7 +72,7 @@ enum class SmallScreenPosition : u32 {
 enum class StereoRenderOption : u32 {
     Off = 0,
     SideBySide = 1,
-    ReverseSideBySide = 2,
+    SideBySideFull = 2,
     Anaglyph = 3,
     Interlaced = 4,
     ReverseInterlaced = 5,
@@ -83,6 +84,14 @@ enum class StereoRenderOption : u32 {
 enum class MonoRenderOption : u32 {
     LeftEye = 0,
     RightEye = 1,
+};
+
+// on android, which displays to render stereo mode to
+enum class StereoWhichDisplay : u32 {
+    None = 0, // equivalent to StereoRenderOption = Off
+    Both = 1,
+    PrimaryOnly = 2,
+    SecondaryOnly = 3
 };
 
 enum class AudioEmulation : u32 {
@@ -104,6 +113,15 @@ enum class TextureSampling : u32 {
     GameControlled = 0,
     NearestNeighbor = 1,
     Linear = 2,
+};
+
+enum class AspectRatio : u32 {
+    Default = 0,
+    R16_9 = 1,
+    R4_3 = 2,
+    R21_9 = 3,
+    R16_10 = 4,
+    Stretch = 5,
 };
 
 namespace NativeButton {
@@ -459,6 +477,7 @@ struct Values {
     // Data Storage
     Setting<bool> use_virtual_sd{true, "use_virtual_sd"};
     Setting<bool> use_custom_storage{false, "use_custom_storage"};
+    Setting<bool> compress_cia_installs{false, "compress_cia_installs"};
 
     // System
     SwitchableSetting<s32> region_value{REGION_VALUE_AUTO_SELECT, "region_value"};
@@ -470,6 +489,7 @@ struct Values {
     Setting<bool> plugin_loader_enabled{false, "plugin_loader"};
     Setting<bool> allow_plugin_loader{true, "allow_plugin_loader"};
     Setting<u16> steps_per_hour{0, "steps_per_hour"};
+    Setting<bool> apply_region_free_patch{true, "apply_region_free_patch"};
 
     // Renderer
     SwitchableSetting<GraphicsAPI, true> graphics_api{
@@ -489,16 +509,17 @@ struct Values {
     Setting<bool> renderer_debug{false, "renderer_debug"};
     Setting<bool> dump_command_buffers{false, "dump_command_buffers"};
     SwitchableSetting<bool> spirv_shader_gen{true, "spirv_shader_gen"};
+    SwitchableSetting<bool> disable_spirv_optimizer{true, "disable_spirv_optimizer"};
     SwitchableSetting<bool> async_shader_compilation{false, "async_shader_compilation"};
     SwitchableSetting<bool> async_presentation{true, "async_presentation"};
     SwitchableSetting<bool> use_hw_shader{true, "use_hw_shader"};
     SwitchableSetting<bool> use_disk_shader_cache{true, "use_disk_shader_cache"};
     SwitchableSetting<bool> shaders_accurate_mul{true, "shaders_accurate_mul"};
-    SwitchableSetting<bool> use_vsync_new{true, "use_vsync_new"};
+    SwitchableSetting<bool> use_vsync{true, "use_vsync"};
     Setting<bool> use_shader_jit{true, "use_shader_jit"};
     SwitchableSetting<u32, true> resolution_factor{1, 0, 10, "resolution_factor"};
     SwitchableSetting<double, true> frame_limit{100, 0, 1000, "frame_limit"};
-    SwitchableSetting<int, true> turbo_speed{200, 0, 1000, "turbo_speed"};
+    SwitchableSetting<double, true> turbo_limit{200, 0, 1000, "turbo_limit"};
     SwitchableSetting<TextureFilter> texture_filter{TextureFilter::NoFilter, "texture_filter"};
     SwitchableSetting<TextureSampling> texture_sampling{TextureSampling::GameControlled,
                                                         "texture_sampling"};
@@ -508,6 +529,8 @@ struct Values {
     SwitchableSetting<LayoutOption> layout_option{LayoutOption::Default, "layout_option"};
     SwitchableSetting<bool> swap_screen{false, "swap_screen"};
     SwitchableSetting<bool> upright_screen{false, "upright_screen"};
+    SwitchableSetting<SecondaryDisplayLayout> secondary_display_layout{SecondaryDisplayLayout::None,
+                                                                       "secondary_display_layout"};
     SwitchableSetting<float, true> large_screen_proportion{4.f, 1.f, 16.f,
                                                            "large_screen_proportion"};
     SwitchableSetting<int> screen_gap{0, "screen_gap"};
@@ -522,7 +545,7 @@ struct Values {
     Setting<u16> custom_bottom_width{640, "custom_bottom_width"};
     Setting<u16> custom_bottom_height{480, "custom_bottom_height"};
     Setting<u16> custom_second_layer_opacity{100, "custom_second_layer_opacity"};
-
+    SwitchableSetting<AspectRatio> aspect_ratio{AspectRatio::Default, "aspect_ratio"};
     SwitchableSetting<bool> screen_top_stretch{false, "screen_top_stretch"};
     Setting<u16> screen_top_leftright_padding{0, "screen_top_leftright_padding"};
     Setting<u16> screen_top_topbottom_padding{0, "screen_top_topbottom_padding"};
@@ -547,6 +570,10 @@ struct Values {
 
     SwitchableSetting<StereoRenderOption> render_3d{StereoRenderOption::Off, "render_3d"};
     SwitchableSetting<u32> factor_3d{0, "factor_3d"};
+    SwitchableSetting<bool> swap_eyes_3d{false, "swap_eyes_3d"};
+
+    SwitchableSetting<StereoWhichDisplay> render_3d_which_display{StereoWhichDisplay::None,
+                                                                  "render_3d_which_display"};
     SwitchableSetting<MonoRenderOption> mono_render_option{MonoRenderOption::LeftEye,
                                                            "mono_render_option"};
 
@@ -555,8 +582,8 @@ struct Values {
     Setting<s32> cardboard_y_shift{0, "cardboard_y_shift"};
 
     SwitchableSetting<bool> filter_mode{true, "filter_mode"};
-    SwitchableSetting<std::string> pp_shader_name{"none (builtin)", "pp_shader_name"};
-    SwitchableSetting<std::string> anaglyph_shader_name{"dubois (builtin)", "anaglyph_shader_name"};
+    SwitchableSetting<std::string> pp_shader_name{"None (builtin)", "pp_shader_name"};
+    SwitchableSetting<std::string> anaglyph_shader_name{"Dubois (builtin)", "anaglyph_shader_name"};
 
     SwitchableSetting<bool> dump_textures{false, "dump_textures"};
     SwitchableSetting<bool> custom_textures{false, "custom_textures"};
@@ -571,9 +598,9 @@ struct Values {
     SwitchableSetting<bool> enable_realtime_audio{false, "enable_realtime_audio"};
     SwitchableSetting<float, true> volume{1.f, 0.f, 1.f, "volume"};
     Setting<AudioCore::SinkType> output_type{AudioCore::SinkType::Auto, "output_type"};
-    Setting<std::string> output_device{"auto", "output_device"};
+    Setting<std::string> output_device{"Auto", "output_device"};
     Setting<AudioCore::InputType> input_type{AudioCore::InputType::Auto, "input_type"};
-    Setting<std::string> input_device{"auto", "input_device"};
+    Setting<std::string> input_device{"Auto", "input_device"};
 
     // Camera
     std::array<std::string, Service::CAM::NumCameras> camera_name;
@@ -587,6 +614,7 @@ struct Values {
     Setting<bool> use_gdbstub{false, "use_gdbstub"};
     Setting<u16> gdbstub_port{24689, "gdbstub_port"};
     Setting<bool> instant_debug_log{false, "instant_debug_log"};
+    Setting<bool> enable_rpc_server{false, "enable_rpc_server"};
 
     // Miscellaneous
     Setting<std::string> log_filter{"*:Info", "log_filter"};

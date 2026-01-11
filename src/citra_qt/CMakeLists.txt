@@ -171,15 +171,13 @@ add_library(citra_qt STATIC EXCLUDE_FROM_ALL
     multiplayer/state.cpp
     multiplayer/state.h
     multiplayer/validation.h
-    play_time_manager.cpp
-    play_time_manager.h
     precompiled_headers.h
+    qt_image_interface.cpp
+    qt_image_interface.h
     uisettings.cpp
     uisettings.h
     user_data_migration.cpp
     user_data_migration.h
-    qt_image_interface.cpp
-    qt_image_interface.h
     util/clickable_label.cpp
     util/clickable_label.h
     util/graphics_device_info.cpp
@@ -191,6 +189,13 @@ add_library(citra_qt STATIC EXCLUDE_FROM_ALL
     util/util.cpp
     util/util.h
 )
+
+if (APPLE)
+  target_sources(citra_qt PUBLIC
+    qt_swizzle.h
+    qt_swizzle.mm
+  )
+endif()
 
 file(GLOB COMPAT_LIST
      ${PROJECT_BINARY_DIR}/dist/compatibility_list/compatibility_list.qrc
@@ -273,10 +278,18 @@ if (ENABLE_VULKAN)
 endif()
 
 if (NOT WIN32)
-    target_include_directories(citra_qt PRIVATE ${Qt6Gui_PRIVATE_INCLUDE_DIRS})
+    find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets)
+    if(Qt6_VERSION VERSION_GREATER_EQUAL "6.10.0")
+        find_package(Qt6 REQUIRED COMPONENTS GuiPrivate)
+        target_link_libraries(citra_qt PRIVATE Qt6::GuiPrivate)
+    else()
+        target_include_directories(citra_qt PRIVATE ${Qt6Gui_PRIVATE_INCLUDE_DIRS})
+    endif()
 endif()
 
-if (UNIX AND NOT APPLE)
+if (APPLE)
+    target_link_libraries(citra_qt PRIVATE Qt6::QDarwinCameraPermissionPlugin)
+elseif (UNIX)
     target_link_libraries(citra_qt PRIVATE Qt6::DBus gamemode)
 endif()
 

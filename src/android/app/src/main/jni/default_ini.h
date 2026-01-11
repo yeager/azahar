@@ -113,6 +113,10 @@ async_shader_compilation =
 # 0: GLSL, 1: SPIR-V (default)
 spirv_shader_gen =
 
+# Whether to disable the SPIRV optimizer. Disabling it reduces stutter, but may slightly worsen performance
+# 0: Enabled, 1: Disabled (default)
+disable_spirv_optimizer =
+
 # Whether to use hardware shaders to emulate 3DS shaders
 # 0: Software, 1 (default): Hardware
 use_hw_shader =
@@ -130,10 +134,10 @@ use_shader_jit =
 # 0 (default): Game Controlled, 1: Nearest Neighbor, 2: Linear
 texture_sampling =
 
-# Forces VSync on the display thread. Usually doesn't impact performance, but on some drivers it can
-# so only turn this off if you notice a speed difference.
-# 0: Off, 1 (default): On
-use_vsync_new =
+# Forces VSync on the display thread. Can cause input delay, so only turn this on
+# if you have screen tearing, which is unusual on Android
+# 0 (default): Off, 1: On
+use_vsync =
 
 # Reduce stuttering by storing and loading generated shaders to disk
 # 0: Off, 1 (default. On)
@@ -144,10 +148,6 @@ use_disk_shader_cache =
 # factor for the 3DS resolution
 resolution_factor =
 
-# Whether to enable V-Sync (caps the framerate at 60FPS) or not.
-# 0 (default): Off, 1: On
-vsync_enabled =
-
 # Turns on the frame limiter, which will limit frames output to the target game speed
 # 0: Off, 1: On (default)
 use_frame_limit =
@@ -156,19 +156,36 @@ use_frame_limit =
 # 1 - 9999: Speed limit as a percentage of target game speed. 100 (default)
 frame_limit =
 
+# Alternative frame limit which can be triggered by the user
+# 1 - 9999: Speed limit as a percentage of target game speed. 100 (default)
+turbo_limit =
+
 # The clear color for the renderer. What shows up on the sides of the bottom screen.
 # Must be in range of 0.0-1.0. Defaults to 0.0 for all.
 bg_red =
 bg_blue =
 bg_green =
 
+# Opacity of second layer when using custom layout option (bottom screen unless swapped). Useful if positioning on top of the first layer.
+custom_second_layer_opacity =
+
 # Whether and how Stereoscopic 3D should be rendered
-# 0 (default): Off, 1: Side by Side, 2: Reverse Side by Side, 3: Anaglyph, 4: Interlaced, 5: Reverse Interlaced, 6: Cardboard VR
+# 0: Off, 1: Half Width Side by Side, 2 (default): Full Width Side by Side, 3: Anaglyph, 4: Interlaced, 5: Reverse Interlaced, 6: Cardboard VR
+# 0 is no longer supported in the interface, as using render_3d_which_display = 0 has the same effect, but supported here for backwards compatibility
 render_3d =
 
 # Change 3D Intensity
 # 0 - 255: Intensity. 0 (default)
 factor_3d =
+
+# Swap Eyes in 3d
+# true: Swap eyes, false (default): Do not swap eyes
+swap_eyes_3d =
+
+# Which Display to render 3d mode to
+# 0 (default) - None. Equivalent to render_3d=0
+# 1: Both, 2: Primary Only, 3: Secondary Only
+render_3d_which_display =
 
 # The name of the post processing shader to apply.
 # Loaded from shaders if render_3d is off or side by side.
@@ -201,6 +218,20 @@ disable_right_eye_render =
 # 4: Hybrid
 # 5: Custom Layout
 layout_option =
+
+[Storage]
+# Whether to compress the installed CIA contents
+# 0 (default): Do not compress, 1: Compress
+compress_cia_installs =
+
+# Position of the performance overlay
+# 0: Top Left
+# 1: Center Top
+# 2: Top Right
+# 3: Bottom Left
+# 4: Center Bottom
+# 5: Bottom Right
+performance_overlay_position =
 
 # Screen Gap - adds a gap between screens in all two-screen modes
 # Measured in pixels relative to the 240px default height of the screens
@@ -265,6 +296,15 @@ swap_screen =
 # Expands the display area to include the cutout (or notch) area
 # 0 (default): Off, 1: On
 expand_to_cutout_area =
+
+# Secondary Display Layout
+# What the game should do if a secondary display is connected physically or using
+# Miracast / Chromecast screen mirroring
+# 0 (default) - Use System Default (mirror)
+# 1 - Show Top Screen Only
+# 2 - Show Bottom Screen Only
+# 3 - Show both screens side by side
+secondary_display_layout =
 
 # Screen placement settings when using Cardboard VR (render3d = 4)
 # 30 - 100: Screen size as a percentage of the viewport. 85 (default)
@@ -383,6 +423,11 @@ steps_per_hour =
 plugin_loader =
 allow_plugin_loader =
 
+# Apply region free patch to installed applications
+# Patches the region of installed applications to be region free, so that they always appear on the home menu.
+# 0: Disabled, 1 (default): Enabled
+apply_region_free_patch =
+
 [Camera]
 # Which camera engine to use for the right outer camera
 # blank: a dummy camera that always returns black image
@@ -432,6 +477,10 @@ gdbstub_port=24689
 # Immediately commits the debug log to file. Use this if Azahar crashes and the log output is being cut.
 instant_debug_log =
 
+# Enable RPC server for scripting purposes. Allows accessing guest memory remotely.
+# 0 (default): Off, 1: On
+enable_rpc_server =
+
 # Delay the start of apps when LLE modules are enabled
 # 0: Off, 1 (default): On
 delay_start_for_lle_modules =
@@ -445,9 +494,8 @@ deterministic_async_operations =
 
 [WebService]
 # URL for Web API
-web_api_url = https://api.citra-emu.org
+web_api_url =
 # Username and token for Citra Web Service
-# See https://profile.citra-emu.org/ for more info
 citra_username =
 citra_token =
 )";

@@ -145,7 +145,7 @@ void SdlConfig::ReadValues() {
     ReadSetting("Renderer", Settings::values.resolution_factor);
     ReadSetting("Renderer", Settings::values.use_disk_shader_cache);
     ReadSetting("Renderer", Settings::values.frame_limit);
-    ReadSetting("Renderer", Settings::values.use_vsync_new);
+    ReadSetting("Renderer", Settings::values.use_vsync);
     ReadSetting("Renderer", Settings::values.texture_filter);
     ReadSetting("Renderer", Settings::values.texture_sampling);
     ReadSetting("Renderer", Settings::values.delay_game_render_thread_us);
@@ -213,6 +213,7 @@ void SdlConfig::ReadValues() {
     // Data Storage
     ReadSetting("Data Storage", Settings::values.use_virtual_sd);
     ReadSetting("Data Storage", Settings::values.use_custom_storage);
+    ReadSetting("Data Storage", Settings::values.compress_cia_installs);
 
     if (Settings::values.use_custom_storage) {
         FileUtil::UpdateUserPath(FileUtil::UserPath::NANDDir,
@@ -252,6 +253,7 @@ void SdlConfig::ReadValues() {
     ReadSetting("System", Settings::values.plugin_loader_enabled);
     ReadSetting("System", Settings::values.allow_plugin_loader);
     ReadSetting("System", Settings::values.steps_per_hour);
+    ReadSetting("System", Settings::values.apply_region_free_patch);
 
     {
         constexpr const char* default_init_time_offset = "0 00:00:00";
@@ -346,6 +348,7 @@ void SdlConfig::ReadValues() {
     ReadSetting("Debugging", Settings::values.use_gdbstub);
     ReadSetting("Debugging", Settings::values.gdbstub_port);
     ReadSetting("Debugging", Settings::values.instant_debug_log);
+    ReadSetting("Debugging", Settings::values.enable_rpc_server);
 
     for (const auto& service_module : Service::service_module_map) {
         bool use_lle = sdl2_config->GetBoolean("Debugging", "LLE\\" + service_module.name, false);

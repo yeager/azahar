@@ -14,11 +14,11 @@ import android.os.Build
 import android.text.TextUtils
 import androidx.preference.PreferenceManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import kotlin.math.min
 import org.citra.citra_emu.CitraApplication
 import org.citra.citra_emu.R
-import org.citra.citra_emu.display.PortraitScreenLayout
 import org.citra.citra_emu.display.ScreenLayout
+import org.citra.citra_emu.display.StereoMode
+import org.citra.citra_emu.display.StereoWhichDisplay
 import org.citra.citra_emu.features.settings.model.AbstractBooleanSetting
 import org.citra.citra_emu.features.settings.model.AbstractIntSetting
 import org.citra.citra_emu.features.settings.model.AbstractSetting
@@ -102,6 +102,7 @@ class SettingsFragmentPresenter(private val fragmentView: SettingsFragmentView) 
             Settings.SECTION_THEME -> addThemeSettings(sl)
             Settings.SECTION_CUSTOM_LANDSCAPE -> addCustomLandscapeSettings(sl)
             Settings.SECTION_CUSTOM_PORTRAIT -> addCustomPortraitSettings(sl)
+            Settings.SECTION_PERFORMANCE_OVERLAY -> addPerformanceOverlaySettings(sl)
             else -> {
                 fragmentView.showToastMessage("Unimplemented menu", false)
                 return
@@ -112,20 +113,24 @@ class SettingsFragmentPresenter(private val fragmentView: SettingsFragmentView) 
     }
 
     /** Returns the portrait mode width */
-    private fun getWidth(): Int {
-        val dm = Resources.getSystem().displayMetrics;
-        return if (dm.widthPixels < dm.heightPixels)
-            dm.widthPixels
-        else
-            dm.heightPixels
+    private fun getDimensions(): IntArray {
+        val dm = Resources.getSystem().displayMetrics
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val wm = settingsActivity.windowManager.maximumWindowMetrics
+            val height = wm.bounds.height().coerceAtLeast(dm.heightPixels)
+            val width = wm.bounds.width().coerceAtLeast(dm.widthPixels)
+            intArrayOf(width, height)
+        } else {
+            intArrayOf(dm.widthPixels, dm.heightPixels)
+        }
     }
 
-    private fun getHeight(): Int {
-        val dm = Resources.getSystem().displayMetrics;
-        return if (dm.widthPixels < dm.heightPixels)
-            dm.heightPixels
-        else
-            dm.widthPixels
+    private fun getSmallerDimension(): Int {
+        return getDimensions().min()
+    }
+
+    private fun getLargerDimension(): Int {
+        return getDimensions().max()
     }
 
     private fun addConfigSettings(sl: ArrayList<SettingsItem>) {
@@ -218,11 +223,11 @@ class SettingsFragmentPresenter(private val fragmentView: SettingsFragmentView) 
         sl.apply {
             add(
                 SwitchSetting(
-                    IntSetting.USE_FRAME_LIMIT,
+                    BooleanSetting.USE_FRAME_LIMIT,
                     R.string.frame_limit_enable,
                     R.string.frame_limit_enable_description,
-                    IntSetting.USE_FRAME_LIMIT.key,
-                    IntSetting.USE_FRAME_LIMIT.defaultValue
+                    BooleanSetting.USE_FRAME_LIMIT.key,
+                    BooleanSetting.USE_FRAME_LIMIT.defaultValue
                 )
             )
             add(
@@ -239,14 +244,23 @@ class SettingsFragmentPresenter(private val fragmentView: SettingsFragmentView) 
             )
             add(
                 SliderSetting(
-                    IntSetting.TURBO_SPEED,
-                    R.string.turbo_speed,
-                    R.string.turbo_speed_description,
+                    IntSetting.TURBO_LIMIT,
+                    R.string.turbo_limit,
+                    R.string.turbo_limit_description,
                     100,
                     400,
                     "%",
-                    IntSetting.TURBO_SPEED.key,
-                    IntSetting.TURBO_SPEED.defaultValue.toFloat()
+                    IntSetting.TURBO_LIMIT.key,
+                    IntSetting.TURBO_LIMIT.defaultValue.toFloat()
+                )
+            )
+            add(
+                SwitchSetting(
+                    BooleanSetting.ANDROID_HIDE_IMAGES,
+                    R.string.android_hide_images,
+                    R.string.android_hide_images_description,
+                    BooleanSetting.ANDROID_HIDE_IMAGES.key,
+                    BooleanSetting.ANDROID_HIDE_IMAGES.defaultValue
                 )
             )
         }
@@ -293,20 +307,20 @@ class SettingsFragmentPresenter(private val fragmentView: SettingsFragmentView) 
             add(HeaderSetting(R.string.emulation_settings))
             add(
                 SwitchSetting(
-                    IntSetting.NEW_3DS,
+                    BooleanSetting.NEW_3DS,
                     R.string.new_3ds,
                     0,
-                    IntSetting.NEW_3DS.key,
-                    IntSetting.NEW_3DS.defaultValue
+                    BooleanSetting.NEW_3DS.key,
+                    BooleanSetting.NEW_3DS.defaultValue
                 )
             )
             add(
                 SwitchSetting(
-                    IntSetting.LLE_APPLETS,
+                    BooleanSetting.LLE_APPLETS,
                     R.string.lle_applets,
                     0,
-                    IntSetting.LLE_APPLETS.key,
-                    IntSetting.LLE_APPLETS.defaultValue
+                    BooleanSetting.LLE_APPLETS.key,
+                    BooleanSetting.LLE_APPLETS.defaultValue
                 )
             )
             add(
@@ -344,6 +358,15 @@ class SettingsFragmentPresenter(private val fragmentView: SettingsFragmentView) 
                     0,
                     R.array.regionNames,
                     R.array.regionValues,
+                )
+            )
+            add(
+                SwitchSetting(
+                    BooleanSetting.APPLY_REGION_FREE_PATCH,
+                    R.string.apply_region_free_patch,
+                    R.string.apply_region_free_patch_desc,
+                    BooleanSetting.APPLY_REGION_FREE_PATCH.key,
+                    BooleanSetting.APPLY_REGION_FREE_PATCH.defaultValue
                 )
             )
             val systemCountrySetting = object : AbstractShortSetting {
@@ -561,6 +584,16 @@ class SettingsFragmentPresenter(private val fragmentView: SettingsFragmentView) 
                     R.string.allow_plugin_loader_description,
                     BooleanSetting.ALLOW_PLUGIN_LOADER.key,
                     BooleanSetting.ALLOW_PLUGIN_LOADER.defaultValue
+                )
+            )
+            add(HeaderSetting(R.string.storage))
+            add(
+                SwitchSetting(
+                    BooleanSetting.COMPRESS_INSTALLED_CIA_CONTENT,
+                    R.string.compress_cia_installs,
+                    R.string.compress_cia_installs_description,
+                    BooleanSetting.COMPRESS_INSTALLED_CIA_CONTENT.key,
+                    BooleanSetting.COMPRESS_INSTALLED_CIA_CONTENT.defaultValue
                 )
             )
         }
@@ -786,11 +819,11 @@ class SettingsFragmentPresenter(private val fragmentView: SettingsFragmentView) 
             add(HeaderSetting(R.string.miscellaneous))
             add(
                 SwitchSetting(
-                    IntSetting.USE_ARTIC_BASE_CONTROLLER,
+                    BooleanSetting.USE_ARTIC_BASE_CONTROLLER,
                     R.string.use_artic_base_controller,
                     R.string.use_artic_base_controller_description,
-                    IntSetting.USE_ARTIC_BASE_CONTROLLER.key,
-                    IntSetting.USE_ARTIC_BASE_CONTROLLER.defaultValue
+                    BooleanSetting.USE_ARTIC_BASE_CONTROLLER.key,
+                    BooleanSetting.USE_ARTIC_BASE_CONTROLLER.defaultValue
                 )
             )
         }
@@ -839,6 +872,15 @@ class SettingsFragmentPresenter(private val fragmentView: SettingsFragmentView) 
             )
             add(
                 SwitchSetting(
+                    BooleanSetting.DISABLE_SPIRV_OPTIMIZER,
+                    R.string.disable_spirv_optimizer,
+                    R.string.disable_spirv_optimizer_description,
+                    BooleanSetting.DISABLE_SPIRV_OPTIMIZER.key,
+                    BooleanSetting.DISABLE_SPIRV_OPTIMIZER.defaultValue,
+                )
+            )
+            add(
+                SwitchSetting(
                     BooleanSetting.ASYNC_SHADERS,
                     R.string.async_shaders,
                     R.string.async_shaders_description,
@@ -859,29 +901,29 @@ class SettingsFragmentPresenter(private val fragmentView: SettingsFragmentView) 
             )
             add(
                 SwitchSetting(
-                    IntSetting.LINEAR_FILTERING,
+                    BooleanSetting.LINEAR_FILTERING,
                     R.string.linear_filtering,
                     R.string.linear_filtering_description,
-                    IntSetting.LINEAR_FILTERING.key,
-                    IntSetting.LINEAR_FILTERING.defaultValue
+                    BooleanSetting.LINEAR_FILTERING.key,
+                    BooleanSetting.LINEAR_FILTERING.defaultValue
                 )
             )
             add(
                 SwitchSetting(
-                    IntSetting.SHADERS_ACCURATE_MUL,
+                    BooleanSetting.SHADERS_ACCURATE_MUL,
                     R.string.shaders_accurate_mul,
                     R.string.shaders_accurate_mul_description,
-                    IntSetting.SHADERS_ACCURATE_MUL.key,
-                    IntSetting.SHADERS_ACCURATE_MUL.defaultValue
+                    BooleanSetting.SHADERS_ACCURATE_MUL.key,
+                    BooleanSetting.SHADERS_ACCURATE_MUL.defaultValue
                 )
             )
             add(
                 SwitchSetting(
-                    IntSetting.DISK_SHADER_CACHE,
+                    BooleanSetting.DISK_SHADER_CACHE,
                     R.string.use_disk_shader_cache,
                     R.string.use_disk_shader_cache_description,
-                    IntSetting.DISK_SHADER_CACHE.key,
-                    IntSetting.DISK_SHADER_CACHE.defaultValue
+                    BooleanSetting.DISK_SHADER_CACHE.key,
+                    BooleanSetting.DISK_SHADER_CACHE.defaultValue
                 )
             )
             add(
@@ -911,15 +953,28 @@ class SettingsFragmentPresenter(private val fragmentView: SettingsFragmentView) 
             add(HeaderSetting(R.string.stereoscopy))
             add(
                 SingleChoiceSetting(
+                    IntSetting.RENDER_3D_WHICH_DISPLAY,
+                    R.string.render_3d_which_display,
+                    R.string.render_3d_which_display_description,
+                    R.array.render3dWhichDisplay,
+                    R.array.render3dDisplayValues,
+                    IntSetting.RENDER_3D_WHICH_DISPLAY.key,
+                    IntSetting.RENDER_3D_WHICH_DISPLAY.defaultValue
+                )
+            )
+            add(
+                SingleChoiceSetting(
                     IntSetting.STEREOSCOPIC_3D_MODE,
                     R.string.render3d,
-                    0,
+                    R.string.render3d_description,
                     R.array.render3dModes,
                     R.array.render3dValues,
                     IntSetting.STEREOSCOPIC_3D_MODE.key,
-                    IntSetting.STEREOSCOPIC_3D_MODE.defaultValue
+                    IntSetting.STEREOSCOPIC_3D_MODE.defaultValue,
+                    isEnabled = IntSetting.RENDER_3D_WHICH_DISPLAY.int != StereoWhichDisplay.NONE.int
                 )
             )
+
             add(
                 SliderSetting(
                     IntSetting.STEREOSCOPIC_3D_DEPTH,
@@ -934,11 +989,22 @@ class SettingsFragmentPresenter(private val fragmentView: SettingsFragmentView) 
             )
             add(
                 SwitchSetting(
-                    IntSetting.DISABLE_RIGHT_EYE_RENDER,
+                    BooleanSetting.DISABLE_RIGHT_EYE_RENDER,
                     R.string.disable_right_eye_render,
                     R.string.disable_right_eye_render_description,
-                    IntSetting.DISABLE_RIGHT_EYE_RENDER.key,
-                    IntSetting.DISABLE_RIGHT_EYE_RENDER.defaultValue
+                    BooleanSetting.DISABLE_RIGHT_EYE_RENDER.key,
+                    BooleanSetting.DISABLE_RIGHT_EYE_RENDER.defaultValue
+                )
+            )
+
+            add(
+                SwitchSetting(
+                    BooleanSetting.SWAP_EYES_3D,
+                    R.string.swap_eyes_3d,
+                    R.string.swap_eyes_3d_description,
+                    BooleanSetting.SWAP_EYES_3D.key,
+                    BooleanSetting.SWAP_EYES_3D.defaultValue,
+                    isEnabled = IntSetting.RENDER_3D_WHICH_DISPLAY.int != StereoWhichDisplay.NONE.int
                 )
             )
 
@@ -952,7 +1018,8 @@ class SettingsFragmentPresenter(private val fragmentView: SettingsFragmentView) 
                     100,
                     "%",
                     IntSetting.CARDBOARD_SCREEN_SIZE.key,
-                    IntSetting.CARDBOARD_SCREEN_SIZE.defaultValue.toFloat()
+                    IntSetting.CARDBOARD_SCREEN_SIZE.defaultValue.toFloat(),
+                    isEnabled = IntSetting.STEREOSCOPIC_3D_MODE.int == StereoMode.CARDBOARD_VR.int
                 )
             )
             add(
@@ -964,7 +1031,8 @@ class SettingsFragmentPresenter(private val fragmentView: SettingsFragmentView) 
                     100,
                     "%",
                     IntSetting.CARDBOARD_X_SHIFT.key,
-                    IntSetting.CARDBOARD_X_SHIFT.defaultValue.toFloat()
+                    IntSetting.CARDBOARD_X_SHIFT.defaultValue.toFloat(),
+                    isEnabled = IntSetting.STEREOSCOPIC_3D_MODE.int == StereoMode.CARDBOARD_VR.int
                 )
             )
             add(
@@ -976,36 +1044,37 @@ class SettingsFragmentPresenter(private val fragmentView: SettingsFragmentView) 
                     100,
                     "%",
                     IntSetting.CARDBOARD_Y_SHIFT.key,
-                    IntSetting.CARDBOARD_Y_SHIFT.defaultValue.toFloat()
+                    IntSetting.CARDBOARD_Y_SHIFT.defaultValue.toFloat(),
+                    isEnabled = IntSetting.STEREOSCOPIC_3D_MODE.int == StereoMode.CARDBOARD_VR.int
                 )
             )
 
             add(HeaderSetting(R.string.utility))
             add(
                 SwitchSetting(
-                    IntSetting.DUMP_TEXTURES,
+                    BooleanSetting.DUMP_TEXTURES,
                     R.string.dump_textures,
                     R.string.dump_textures_description,
-                    IntSetting.DUMP_TEXTURES.key,
-                    IntSetting.DUMP_TEXTURES.defaultValue
+                    BooleanSetting.DUMP_TEXTURES.key,
+                    BooleanSetting.DUMP_TEXTURES.defaultValue
                 )
             )
             add(
                 SwitchSetting(
-                    IntSetting.CUSTOM_TEXTURES,
+                    BooleanSetting.CUSTOM_TEXTURES,
                     R.string.custom_textures,
                     R.string.custom_textures_description,
-                    IntSetting.CUSTOM_TEXTURES.key,
-                    IntSetting.CUSTOM_TEXTURES.defaultValue
+                    BooleanSetting.CUSTOM_TEXTURES.key,
+                    BooleanSetting.CUSTOM_TEXTURES.defaultValue
                 )
             )
             add(
                 SwitchSetting(
-                    IntSetting.ASYNC_CUSTOM_LOADING,
+                    BooleanSetting.ASYNC_CUSTOM_LOADING,
                     R.string.async_custom_loading,
                     R.string.async_custom_loading_description,
-                    IntSetting.ASYNC_CUSTOM_LOADING.key,
-                    IntSetting.ASYNC_CUSTOM_LOADING.defaultValue
+                    BooleanSetting.ASYNC_CUSTOM_LOADING.key,
+                    BooleanSetting.ASYNC_CUSTOM_LOADING.defaultValue
                 )
             )
 
@@ -1071,6 +1140,15 @@ class SettingsFragmentPresenter(private val fragmentView: SettingsFragmentView) 
                 )
             )
             add(
+                SwitchSetting(
+                    BooleanSetting.UPRIGHT_SCREEN,
+                    R.string.emulation_rotate_upright,
+                    0,
+                    BooleanSetting.UPRIGHT_SCREEN.key,
+                    BooleanSetting.UPRIGHT_SCREEN.defaultValue
+                )
+            )
+            add(
                 SingleChoiceSetting(
                     IntSetting.PORTRAIT_SCREEN_LAYOUT,
                     R.string.emulation_switch_portrait_layout,
@@ -1079,6 +1157,29 @@ class SettingsFragmentPresenter(private val fragmentView: SettingsFragmentView) 
                     R.array.portraitLayoutValues,
                     IntSetting.PORTRAIT_SCREEN_LAYOUT.key,
                     IntSetting.PORTRAIT_SCREEN_LAYOUT.defaultValue
+                )
+            )
+            add(
+                SingleChoiceSetting(
+                    IntSetting.SECONDARY_DISPLAY_LAYOUT,
+                    R.string.emulation_switch_secondary_layout,
+                    R.string.emulation_switch_secondary_layout_description,
+                    R.array.secondaryLayouts,
+                    R.array.secondaryLayoutValues,
+                    IntSetting.SECONDARY_DISPLAY_LAYOUT.key,
+                    IntSetting.SECONDARY_DISPLAY_LAYOUT.defaultValue
+                )
+            )
+            add(
+                SingleChoiceSetting(
+                    IntSetting.ASPECT_RATIO,
+                    R.string.emulation_aspect_ratio,
+                    0,
+                    R.array.aspectRatioNames,
+                    R.array.aspectRatioValues,
+                    IntSetting.ASPECT_RATIO.key,
+                    IntSetting.ASPECT_RATIO.defaultValue,
+                    isEnabled = IntSetting.SCREEN_LAYOUT.int == ScreenLayout.SINGLE_SCREEN.int,
                 )
             )
             add(
@@ -1117,6 +1218,97 @@ class SettingsFragmentPresenter(private val fragmentView: SettingsFragmentView) 
                 )
             )
             add(
+                SliderSetting(
+                    FloatSetting.SECOND_SCREEN_OPACITY,
+                    R.string.second_screen_opacity,
+                    R.string.second_screen_opacity_description,
+                    0,
+                    100,
+                    "%",
+                    FloatSetting.SECOND_SCREEN_OPACITY.key,
+                    FloatSetting.SECOND_SCREEN_OPACITY.defaultValue,
+                    isEnabled = IntSetting.SCREEN_LAYOUT.int == ScreenLayout.CUSTOM_LAYOUT.int
+                )
+            )
+            add(HeaderSetting(R.string.bg_color, R.string.bg_color_description))
+            val bgRedSetting = object : AbstractIntSetting {
+                override var int: Int
+                    get() = (FloatSetting.BACKGROUND_RED.float * 255).toInt()
+                    set(value) {
+                        FloatSetting.BACKGROUND_RED.float = value.toFloat() / 255
+                        settings.saveSetting(FloatSetting.BACKGROUND_RED, SettingsFile.FILE_NAME_CONFIG)
+                    }
+                override val key = null
+                override val section = null
+                override val isRuntimeEditable = false
+                override val valueAsString = int.toString()
+                override val defaultValue = FloatSetting.BACKGROUND_RED.defaultValue
+            }
+            add(
+                SliderSetting(
+                    bgRedSetting,
+                    R.string.bg_red,
+                    0,
+                    0,
+                    255,
+                    ""
+                )
+            )
+            val bgGreenSetting = object : AbstractIntSetting {
+                override var int: Int
+                    get() = (FloatSetting.BACKGROUND_GREEN.float * 255).toInt()
+                    set(value) {
+                        FloatSetting.BACKGROUND_GREEN.float = value.toFloat() / 255
+                        settings.saveSetting(FloatSetting.BACKGROUND_GREEN, SettingsFile.FILE_NAME_CONFIG)
+                    }
+                override val key = null
+                override val section = null
+                override val isRuntimeEditable = false
+                override val valueAsString = int.toString()
+                override val defaultValue = FloatSetting.BACKGROUND_GREEN.defaultValue
+            }
+            add(
+                SliderSetting(
+                    bgGreenSetting,
+                    R.string.bg_green,
+                    0,
+                    0,
+                    255,
+                    ""
+                )
+            )
+            val bgBlueSetting = object : AbstractIntSetting {
+                override var int: Int
+                    get() = (FloatSetting.BACKGROUND_BLUE.float * 255).toInt()
+                    set(value) {
+                        FloatSetting.BACKGROUND_BLUE.float = value.toFloat() / 255
+                        settings.saveSetting(FloatSetting.BACKGROUND_BLUE, SettingsFile.FILE_NAME_CONFIG)
+                    }
+                override val key = null
+                override val section = null
+                override val isRuntimeEditable = false
+                override val valueAsString = int.toString()
+                override val defaultValue = FloatSetting.BACKGROUND_BLUE.defaultValue
+            }
+            add(
+                SliderSetting(
+                    bgBlueSetting,
+                    R.string.bg_blue,
+                    0,
+                    0,
+                    255,
+                    ""
+                )
+            )
+            add(
+                SubmenuSetting(
+                    R.string.performance_overlay_options,
+                    R.string.performance_overlay_options_description,
+                    R.drawable.ic_stats,
+                    Settings.SECTION_PERFORMANCE_OVERLAY
+                )
+            )
+            add(
                 SubmenuSetting(
                     R.string.emulation_landscape_custom_layout,
                     0,
@@ -1135,6 +1327,107 @@ class SettingsFragmentPresenter(private val fragmentView: SettingsFragmentView) 
         }
     }
 
+    private fun addPerformanceOverlaySettings(sl: ArrayList<SettingsItem>) {
+        settingsActivity.setToolbarTitle(settingsActivity.getString(R.string.performance_overlay_options))
+        sl.apply {
+
+            add(HeaderSetting(R.string.visibility))
+
+            add(
+                SwitchSetting(
+                    BooleanSetting.PERF_OVERLAY_ENABLE,
+                    R.string.performance_overlay_enable,
+                    0,
+                    BooleanSetting.PERF_OVERLAY_ENABLE.key,
+                    BooleanSetting.PERF_OVERLAY_ENABLE.defaultValue
+                )
+            )
+
+            add(
+                SwitchSetting(
+                    BooleanSetting.PERF_OVERLAY_BACKGROUND,
+                    R.string.performance_overlay_background,
+                    R.string.performance_overlay_background_description,
+                    BooleanSetting.PERF_OVERLAY_BACKGROUND.key,
+                    BooleanSetting.PERF_OVERLAY_BACKGROUND.defaultValue
+                )
+            )
+
+            add(
+                SingleChoiceSetting(
+                    IntSetting.PERFORMANCE_OVERLAY_POSITION,
+                    R.string.performance_overlay_position,
+                    R.string.performance_overlay_position_description,
+                    R.array.statsPosition,
+                    R.array.statsPositionValues,
+                )
+            )
+
+
+            add(HeaderSetting(R.string.information))
+
+            add(
+                SwitchSetting(
+                    BooleanSetting.PERF_OVERLAY_SHOW_FPS,
+                    R.string.performance_overlay_show_fps,
+                    R.string.performance_overlay_show_fps_description,
+                    BooleanSetting.PERF_OVERLAY_SHOW_FPS.key,
+                    BooleanSetting.PERF_OVERLAY_SHOW_FPS.defaultValue
+                )
+            )
+
+            add(
+                SwitchSetting(
+                    BooleanSetting.PERF_OVERLAY_SHOW_FRAMETIME,
+                    R.string.performance_overlay_show_frametime,
+                    R.string.performance_overlay_show_frametime_description,
+                    BooleanSetting.PERF_OVERLAY_SHOW_FRAMETIME.key,
+                    BooleanSetting.PERF_OVERLAY_SHOW_FRAMETIME.defaultValue
+                )
+            )
+
+            add(
+                SwitchSetting(
+                    BooleanSetting.PERF_OVERLAY_SHOW_SPEED,
+                    R.string.performance_overlay_show_speed,
+                    R.string.performance_overlay_show_speed_description,
+                    BooleanSetting.PERF_OVERLAY_SHOW_SPEED.key,
+                    BooleanSetting.PERF_OVERLAY_SHOW_SPEED.defaultValue
+                )
+            )
+
+            add(
+                SwitchSetting(
+                    BooleanSetting.PERF_OVERLAY_SHOW_APP_RAM_USAGE,
+                    R.string.performance_overlay_show_app_ram_usage,
+                    R.string.performance_overlay_show_app_ram_usage_description,
+                    BooleanSetting.PERF_OVERLAY_SHOW_APP_RAM_USAGE.key,
+                    BooleanSetting.PERF_OVERLAY_SHOW_APP_RAM_USAGE.defaultValue
+                )
+            )
+
+            add(
+                SwitchSetting(
+                    BooleanSetting.PERF_OVERLAY_SHOW_AVAILABLE_RAM,
+                    R.string.performance_overlay_show_available_ram,
+                    R.string.performance_overlay_show_available_ram_description,
+                    BooleanSetting.PERF_OVERLAY_SHOW_AVAILABLE_RAM.key,
+                    BooleanSetting.PERF_OVERLAY_SHOW_AVAILABLE_RAM.defaultValue
+                )
+            )
+
+            add(
+                SwitchSetting(
+                    BooleanSetting.PERF_OVERLAY_SHOW_BATTERY_TEMP,
+                    R.string.performance_overlay_show_battery_temp,
+                    R.string.performance_overlay_show_battery_temp_description,
+                    BooleanSetting.PERF_OVERLAY_SHOW_BATTERY_TEMP.key,
+                    BooleanSetting.PERF_OVERLAY_SHOW_BATTERY_TEMP.defaultValue
+                )
+            )
+        }
+    }
+
     private fun addCustomLandscapeSettings(sl: ArrayList<SettingsItem>) {
         settingsActivity.setToolbarTitle(settingsActivity.getString(R.string.emulation_landscape_custom_layout))
         sl.apply {
@@ -1145,7 +1438,7 @@ class SettingsFragmentPresenter(private val fragmentView: SettingsFragmentView) 
                     R.string.emulation_custom_layout_x,
                     0,
                     0,
-                    getHeight(),
+                    getLargerDimension(),
                     "px",
                     IntSetting.LANDSCAPE_TOP_X.key,
                     IntSetting.LANDSCAPE_TOP_X.defaultValue.toFloat()
@@ -1157,7 +1450,7 @@ class SettingsFragmentPresenter(private val fragmentView: SettingsFragmentView) 
                     R.string.emulation_custom_layout_y,
                     0,
                     0,
-                    getWidth(),
+                    getSmallerDimension(),
                     "px",
                     IntSetting.LANDSCAPE_TOP_Y.key,
                     IntSetting.LANDSCAPE_TOP_Y.defaultValue.toFloat()
@@ -1169,7 +1462,7 @@ class SettingsFragmentPresenter(private val fragmentView: SettingsFragmentView) 
                     R.string.emulation_custom_layout_width,
                     0,
                     0,
-                    getHeight(),
+                    getLargerDimension(),
                     "px",
                     IntSetting.LANDSCAPE_TOP_WIDTH.key,
                     IntSetting.LANDSCAPE_TOP_WIDTH.defaultValue.toFloat()
@@ -1181,7 +1474,7 @@ class SettingsFragmentPresenter(private val fragmentView: SettingsFragmentView) 
                     R.string.emulation_custom_layout_height,
                     0,
                     0,
-                    getWidth(),
+                    getSmallerDimension(),
                     "px",
                     IntSetting.LANDSCAPE_TOP_HEIGHT.key,
                     IntSetting.LANDSCAPE_TOP_HEIGHT.defaultValue.toFloat()
@@ -1194,7 +1487,7 @@ class SettingsFragmentPresenter(private val fragmentView: SettingsFragmentView) 
                     R.string.emulation_custom_layout_x,
                     0,
                     0,
-                    getHeight(),
+                    getLargerDimension(),
                     "px",
                     IntSetting.LANDSCAPE_BOTTOM_X.key,
                     IntSetting.LANDSCAPE_BOTTOM_X.defaultValue.toFloat()
@@ -1206,7 +1499,7 @@ class SettingsFragmentPresenter(private val fragmentView: SettingsFragmentView) 
                     R.string.emulation_custom_layout_y,
                     0,
                     0,
-                    getWidth(),
+                    getSmallerDimension(),
                     "px",
                     IntSetting.LANDSCAPE_BOTTOM_Y.key,
                     IntSetting.LANDSCAPE_BOTTOM_Y.defaultValue.toFloat()
@@ -1218,7 +1511,7 @@ class SettingsFragmentPresenter(private val fragmentView: SettingsFragmentView) 
                     R.string.emulation_custom_layout_width,
                     0,
                     0,
-                    getHeight(),
+                    getLargerDimension(),
                     "px",
                     IntSetting.LANDSCAPE_BOTTOM_WIDTH.key,
                     IntSetting.LANDSCAPE_BOTTOM_WIDTH.defaultValue.toFloat()
@@ -1230,7 +1523,7 @@ class SettingsFragmentPresenter(private val fragmentView: SettingsFragmentView) 
                     R.string.emulation_custom_layout_height,
                     0,
                     0,
-                    getWidth(),
+                    getSmallerDimension(),
                     "px",
                     IntSetting.LANDSCAPE_BOTTOM_HEIGHT.key,
                     IntSetting.LANDSCAPE_BOTTOM_HEIGHT.defaultValue.toFloat()
@@ -1250,7 +1543,7 @@ class SettingsFragmentPresenter(private val fragmentView: SettingsFragmentView) 
                     R.string.emulation_custom_layout_x,
                     0,
                     0,
-                    getWidth(),
+                    getSmallerDimension(),
                     "px",
                     IntSetting.PORTRAIT_TOP_X.key,
                     IntSetting.PORTRAIT_TOP_X.defaultValue.toFloat()
@@ -1262,7 +1555,7 @@ class SettingsFragmentPresenter(private val fragmentView: SettingsFragmentView) 
                     R.string.emulation_custom_layout_y,
                     0,
                     0,
-                    getHeight(),
+                    getLargerDimension(),
                     "px",
                     IntSetting.PORTRAIT_TOP_Y.key,
                     IntSetting.PORTRAIT_TOP_Y.defaultValue.toFloat()
@@ -1274,7 +1567,7 @@ class SettingsFragmentPresenter(private val fragmentView: SettingsFragmentView) 
                     R.string.emulation_custom_layout_width,
                     0,
                     0,
-                    getWidth(),
+                    getSmallerDimension(),
                     "px",
                     IntSetting.PORTRAIT_TOP_WIDTH.key,
                     IntSetting.PORTRAIT_TOP_WIDTH.defaultValue.toFloat()
@@ -1286,7 +1579,7 @@ class SettingsFragmentPresenter(private val fragmentView: SettingsFragmentView) 
                     R.string.emulation_custom_layout_height,
                     0,
                     0,
-                    getHeight(),
+                    getLargerDimension(),
                     "px",
                     IntSetting.PORTRAIT_TOP_HEIGHT.key,
                     IntSetting.PORTRAIT_TOP_HEIGHT.defaultValue.toFloat()
@@ -1299,7 +1592,7 @@ class SettingsFragmentPresenter(private val fragmentView: SettingsFragmentView) 
                     R.string.emulation_custom_layout_x,
                     0,
                     0,
-                    getWidth(),
+                    getSmallerDimension(),
                     "px",
                     IntSetting.PORTRAIT_BOTTOM_X.key,
                     IntSetting.PORTRAIT_BOTTOM_X.defaultValue.toFloat()
@@ -1311,7 +1604,7 @@ class SettingsFragmentPresenter(private val fragmentView: SettingsFragmentView) 
                     R.string.emulation_custom_layout_y,
                     0,
                     0,
-                    getHeight(),
+                    getLargerDimension(),
                     "px",
                     IntSetting.PORTRAIT_BOTTOM_Y.key,
                     IntSetting.PORTRAIT_BOTTOM_Y.defaultValue.toFloat()
@@ -1323,7 +1616,7 @@ class SettingsFragmentPresenter(private val fragmentView: SettingsFragmentView) 
                     R.string.emulation_custom_layout_width,
                     0,
                     0,
-                    getWidth(),
+                    getSmallerDimension(),
                     "px",
                     IntSetting.PORTRAIT_BOTTOM_WIDTH.key,
                     IntSetting.PORTRAIT_BOTTOM_WIDTH.defaultValue.toFloat()
@@ -1335,7 +1628,7 @@ class SettingsFragmentPresenter(private val fragmentView: SettingsFragmentView) 
                     R.string.emulation_custom_layout_height,
                     0,
                     0,
-                    getHeight(),
+                    getLargerDimension(),
                     "px",
                     IntSetting.PORTRAIT_BOTTOM_HEIGHT.key,
                     IntSetting.PORTRAIT_BOTTOM_HEIGHT.defaultValue.toFloat()
@@ -1362,20 +1655,20 @@ class SettingsFragmentPresenter(private val fragmentView: SettingsFragmentView) 
             )
             add(
                 SwitchSetting(
-                    IntSetting.ENABLE_AUDIO_STRETCHING,
+                    BooleanSetting.ENABLE_AUDIO_STRETCHING,
                     R.string.audio_stretch,
                     R.string.audio_stretch_description,
-                    IntSetting.ENABLE_AUDIO_STRETCHING.key,
-                    IntSetting.ENABLE_AUDIO_STRETCHING.defaultValue
+                    BooleanSetting.ENABLE_AUDIO_STRETCHING.key,
+                    BooleanSetting.ENABLE_AUDIO_STRETCHING.defaultValue
                 )
             )
             add(
                 SwitchSetting(
-                    IntSetting.ENABLE_REALTIME_AUDIO,
+                    BooleanSetting.ENABLE_REALTIME_AUDIO,
                     R.string.realtime_audio,
                     R.string.realtime_audio_description,
-                    IntSetting.ENABLE_REALTIME_AUDIO.key,
-                    IntSetting.ENABLE_REALTIME_AUDIO.defaultValue
+                    BooleanSetting.ENABLE_REALTIME_AUDIO.key,
+                    BooleanSetting.ENABLE_REALTIME_AUDIO.defaultValue
                 )
             )
             add(
@@ -1430,38 +1723,47 @@ class SettingsFragmentPresenter(private val fragmentView: SettingsFragmentView) 
             )
             add(
                 SwitchSetting(
-                    IntSetting.CPU_JIT,
+                    BooleanSetting.CPU_JIT,
                     R.string.cpu_jit,
                     R.string.cpu_jit_description,
-                    IntSetting.CPU_JIT.key,
-                    IntSetting.CPU_JIT.defaultValue
+                    BooleanSetting.CPU_JIT.key,
+                    BooleanSetting.CPU_JIT.defaultValue
                 )
             )
             add(
                 SwitchSetting(
-                    IntSetting.HW_SHADER,
+                    BooleanSetting.HW_SHADER,
                     R.string.hw_shaders,
                     R.string.hw_shaders_description,
-                    IntSetting.HW_SHADER.key,
-                    IntSetting.HW_SHADER.defaultValue
+                    BooleanSetting.HW_SHADER.key,
+                    BooleanSetting.HW_SHADER.defaultValue
                 )
             )
             add(
                 SwitchSetting(
-                    IntSetting.VSYNC,
+                    BooleanSetting.SHADER_JIT,
+                    R.string.shader_jit,
+                    R.string.shader_jit_description,
+                    BooleanSetting.SHADER_JIT.key,
+                    BooleanSetting.SHADER_JIT.defaultValue
+                )
+            )
+            add(
+                SwitchSetting(
+                    BooleanSetting.VSYNC,
                     R.string.vsync,
                     R.string.vsync_description,
-                    IntSetting.VSYNC.key,
-                    IntSetting.VSYNC.defaultValue
+                    BooleanSetting.VSYNC.key,
+                    BooleanSetting.VSYNC.defaultValue
                 )
             )
             add(
                 SwitchSetting(
-                    IntSetting.DEBUG_RENDERER,
+                    BooleanSetting.DEBUG_RENDERER,
                     R.string.renderer_debug,
                     R.string.renderer_debug_description,
-                    IntSetting.DEBUG_RENDERER.key,
-                    IntSetting.DEBUG_RENDERER.defaultValue
+                    BooleanSetting.DEBUG_RENDERER.key,
+                    BooleanSetting.DEBUG_RENDERER.defaultValue
                 )
             )
             add(
@@ -1471,6 +1773,15 @@ class SettingsFragmentPresenter(private val fragmentView: SettingsFragmentView) 
                     R.string.instant_debug_log_description,
                     BooleanSetting.INSTANT_DEBUG_LOG.key,
                     BooleanSetting.INSTANT_DEBUG_LOG.defaultValue
+                )
+            )
+            add(
+                SwitchSetting(
+                    BooleanSetting.ENABLE_RPC_SERVER,
+                    R.string.enable_rpc_server,
+                    R.string.enable_rpc_server_desc,
+                    BooleanSetting.ENABLE_RPC_SERVER.key,
+                    BooleanSetting.ENABLE_RPC_SERVER.defaultValue
                 )
             )
             add(

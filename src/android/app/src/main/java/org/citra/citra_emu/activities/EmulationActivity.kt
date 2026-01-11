@@ -6,11 +6,11 @@ package org.citra.citra_emu.activities
 
 import android.Manifest.permission
 import android.annotation.SuppressLint
-import android.app.Activity
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.view.InputDevice
 import android.view.KeyEvent
@@ -21,6 +21,7 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.os.BundleCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -33,18 +34,21 @@ import org.citra.citra_emu.camera.StillImageCameraHelper.OnFilePickerResult
 import org.citra.citra_emu.contracts.OpenFileResultContract
 import org.citra.citra_emu.databinding.ActivityEmulationBinding
 import org.citra.citra_emu.display.ScreenAdjustmentUtil
+import org.citra.citra_emu.display.SecondaryDisplay
 import org.citra.citra_emu.features.hotkeys.HotkeyUtility
-import org.citra.citra_emu.features.hotkeys.HotkeyFunctions
 import org.citra.citra_emu.features.settings.model.BooleanSetting
 import org.citra.citra_emu.features.settings.model.IntSetting
 import org.citra.citra_emu.features.settings.model.SettingsViewModel
 import org.citra.citra_emu.features.settings.model.view.InputBindingSetting
 import org.citra.citra_emu.fragments.EmulationFragment
 import org.citra.citra_emu.fragments.MessageDialogFragment
+import org.citra.citra_emu.model.Game
 import org.citra.citra_emu.utils.ControllerMappingHelper
 import org.citra.citra_emu.utils.FileBrowserHelper
 import org.citra.citra_emu.utils.EmulationLifecycleUtil
 import org.citra.citra_emu.utils.EmulationMenuSettings
+import org.citra.citra_emu.utils.Log
+import org.citra.citra_emu.utils.RefreshRateUtil
 import org.citra.citra_emu.utils.ThemeUtil
 import org.citra.citra_emu.viewmodel.EmulationViewModel
 
@@ -57,8 +61,16 @@ class EmulationActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityEmulationBinding
     private lateinit var screenAdjustmentUtil: ScreenAdjustmentUtil
-    private lateinit var hotkeyFunctions: HotkeyFunctions
     private lateinit var hotkeyUtility: HotkeyUtility
+    private lateinit var secondaryDisplay: SecondaryDisplay
+
+    private val onShutdown = Runnable {
+        if (intent.getBooleanExtra("launched_from_shortcut", false)) {
+            finishAffinity()
+        } else {
+            this.finish()
+        }
+    }
 
     private val emulationFragment: EmulationFragment
         get() {
@@ -72,16 +84,17 @@ class EmulationActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         requestWindowFeature(Window.FEATURE_NO_TITLE)
 
+        RefreshRateUtil.enforceRefreshRate(this, sixtyHz = true)
+
         ThemeUtil.setTheme(this)
-
         settingsViewModel.settings.loadSettings()
-
         super.onCreate(savedInstanceState)
+        secondaryDisplay = SecondaryDisplay(this)
+        secondaryDisplay.updateDisplay()
 
         binding = ActivityEmulationBinding.inflate(layoutInflater)
         screenAdjustmentUtil = ScreenAdjustmentUtil(this, windowManager, settingsViewModel.settings)
-        hotkeyFunctions = HotkeyFunctions(settingsViewModel.settings)
-        hotkeyUtility = HotkeyUtility(screenAdjustmentUtil, hotkeyFunctions, this)
+        hotkeyUtility = HotkeyUtility(screenAdjustmentUtil, this)
         setContentView(binding.root)
 
         val navHostFragment =
@@ -100,18 +113,26 @@ class EmulationActivity : AppCompatActivity() {
             windowManager.defaultDisplay.rotation
         )
 
-        EmulationLifecycleUtil.addShutdownHook(hook = {
-            if (intent.getBooleanExtra("launched_from_shortcut", false)) {
-                finishAffinity()
-            } else {
-                this.finish()
-            }
-        })
+        EmulationLifecycleUtil.addShutdownHook(onShutdown)
 
         isEmulationRunning = true
         instance = this
 
         applyOrientationSettings() // Check for orientation settings at startup
+
+        val game = try {
+            intent.extras?.let { extras ->
+                BundleCompat.getParcelable(extras, "game", Game::class.java)
+            } ?: run {
+                Log.error("[EmulationActivity] Missing game data in intent extras")
+                return
+            }
+        } catch (e: Exception) {
+            Log.error("[EmulationActivity] Failed to retrieve game data: ${e.message}")
+            return
+        }
+
+        NativeLibrary.playTimeManagerStart(game.titleId)
     }
 
     // On some devices, the system bars will not disappear on first boot or after some
@@ -123,6 +144,11 @@ class EmulationActivity : AppCompatActivity() {
         applyOrientationSettings() // Check for orientation settings changes on runtime
     }
 
+    override fun onStop() {
+        secondaryDisplay.releasePresentation()
+        super.onStop()
+    }
+
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         enableFullscreenImmersive()
@@ -130,6 +156,7 @@ class EmulationActivity : AppCompatActivity() {
 
     public override fun onRestart() {
         super.onRestart()
+        secondaryDisplay.updateDisplay()
         NativeLibrary.reloadCameraDevices()
     }
 
@@ -144,10 +171,13 @@ class EmulationActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
-        hotkeyFunctions.resetTurboSpeed()
-        EmulationLifecycleUtil.clear()
+        EmulationLifecycleUtil.removeHook(onShutdown)
+        NativeLibrary.playTimeManagerStop()
         isEmulationRunning = false
         instance = null
+        secondaryDisplay.releasePresentation()
+        secondaryDisplay.releaseVD()
+
         super.onDestroy()
     }
 
@@ -241,20 +271,26 @@ class EmulationActivity : AppCompatActivity() {
             preferences.getInt(InputBindingSetting.getInputButtonKey(event.keyCode), event.keyCode)
         val action: Int = when (event.action) {
             KeyEvent.ACTION_DOWN -> {
+                hotkeyUtility.handleHotkey(button)
+
                 // On some devices, the back gesture / button press is not intercepted by androidx
                 // and fails to open the emulation menu. So we're stuck running deprecated code to
                 // cover for either a fault on androidx's side or in OEM skins (MIUI at least)
                 if (event.keyCode == KeyEvent.KEYCODE_BACK) {
-                    onBackPressed()
+                    // If the hotkey is pressed, we don't want to open the drawer
+                    if (!hotkeyUtility.HotkeyIsPressed) {
+                        onBackPressed()
+                    }
                 }
-
-                hotkeyUtility.handleHotkey(button)
 
                 // Normal key events.
                 NativeLibrary.ButtonState.PRESSED
             }
 
-            KeyEvent.ACTION_UP -> NativeLibrary.ButtonState.RELEASED
+            KeyEvent.ACTION_UP -> {
+                hotkeyUtility.HotkeyIsPressed = false
+                NativeLibrary.ButtonState.RELEASED
+            }
             else -> return false
         }
         val input = event.device
@@ -306,6 +342,7 @@ class EmulationActivity : AppCompatActivity() {
                 preferences.getInt(InputBindingSetting.getInputAxisButtonKey(axis), -1)
             val guestOrientation =
                 preferences.getInt(InputBindingSetting.getInputAxisOrientationKey(axis), -1)
+            val inverted = preferences.getBoolean(InputBindingSetting.getInputAxisInvertedKey(axis),false);
             if (nextMapping == -1 || guestOrientation == -1) {
                 // Axis is unmapped
                 continue
@@ -314,6 +351,8 @@ class EmulationActivity : AppCompatActivity() {
                 // Skip joystick wobble
                 value = 0f
             }
+            if (inverted) value = -value;
+
             when (nextMapping) {
                 NativeLibrary.ButtonType.STICK_LEFT -> {
                     axisValuesCirclePad[guestOrientation] = value
