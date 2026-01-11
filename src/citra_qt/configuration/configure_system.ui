@@ -318,6 +318,11 @@ installed applications.</string>
               </item>
               <item>
                <property name="text">
+                <string>Swedish (Svenska)</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
                 <string>Traditional Chinese (正體中文)</string>
                </property>
               </item>
